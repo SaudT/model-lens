@@ -1,3 +1,4 @@
+import type { ApiErrorKind } from "@/lib/api-errors";
 import type { ComparisonModelId } from "@/lib/model-pricing";
 
 export type TaskType =
@@ -32,6 +33,7 @@ export type ModelRunResult = {
   latencyMs: number;
   costUsd: number;
   error?: string;
+  errorKind?: ApiErrorKind;
 };
 
 export type QualityScores = Partial<Record<ComparisonModelId, number>>;
@@ -40,4 +42,5 @@ export type JudgeResult = {
   scores: QualityScores;
   latencyMs: number;
   error?: string;
+  errorKind?: ApiErrorKind;
 };

@@ -8,6 +8,11 @@ import {
   type TaskType,
 } from "@/lib/comparison-types";
 import {
+  classifyApiError,
+  classifyThrownError,
+  type ApiErrorKind,
+} from "@/lib/api-errors";
+import {
   COMPARISON_MODELS,
   estimateCostUsd,
   type ComparisonModelId,
@@ -29,6 +34,15 @@ type JudgeParams = {
   outputs: { modelId: ComparisonModelId; response: string }[];
 };
 
+class ProviderCallError extends Error {
+  kind: ApiErrorKind;
+
+  constructor(kind: ApiErrorKind, message: string) {
+    super(message);
+    this.kind = kind;
+  }
+}
+
 async function callAnthropic(
   modelId: ComparisonModelId,
   apiKey: string,
@@ -36,33 +50,49 @@ async function callAnthropic(
   userContent: string,
   maxTokens: number
 ) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: modelId,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: userContent }],
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: modelId,
+        max_tokens: maxTokens,
+        system,
+        messages: [{ role: "user", content: userContent }],
+      }),
+    });
+  } catch (err) {
+    const classified = classifyThrownError(err);
+    throw new ProviderCallError(classified.kind, classified.message);
+  }
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error?.message ?? "Anthropic request failed");
+    const msg =
+      (data as { error?: { message?: string } }).error?.message ??
+      "Anthropic request failed";
+    const classified = classifyApiError(msg, res.status);
+    throw new ProviderCallError(classified.kind, classified.message);
   }
 
   const text =
-    data.content?.[0]?.type === "text" ? data.content[0].text : "";
+    (data as { content?: { type: string; text: string }[] }).content?.[0]
+      ?.type === "text"
+      ? (data as { content: { type: string; text: string }[] }).content[0].text
+      : "";
 
   return {
     text,
-    inputTokens: data.usage?.input_tokens ?? 0,
-    outputTokens: data.usage?.output_tokens ?? 0,
+    inputTokens:
+      (data as { usage?: { input_tokens?: number } }).usage?.input_tokens ?? 0,
+    outputTokens:
+      (data as { usage?: { output_tokens?: number } }).usage?.output_tokens ??
+      0,
   };
 }
 
@@ -72,31 +102,65 @@ async function callOpenAI(
   userContent: string,
   maxTokens: number
 ) {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      max_tokens: maxTokens,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: userContent },
-      ],
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        max_tokens: maxTokens,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userContent },
+        ],
+      }),
+    });
+  } catch (err) {
+    const classified = classifyThrownError(err);
+    throw new ProviderCallError(classified.kind, classified.message);
+  }
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error?.message ?? "OpenAI request failed");
+    const msg =
+      (data as { error?: { message?: string } }).error?.message ??
+      "OpenAI request failed";
+    const classified = classifyApiError(msg, res.status);
+    throw new ProviderCallError(classified.kind, classified.message);
   }
 
   return {
-    text: data.choices[0]?.message?.content ?? "",
-    inputTokens: data.usage?.prompt_tokens ?? 0,
-    outputTokens: data.usage?.completion_tokens ?? 0,
+    text:
+      (data as { choices?: { message?: { content?: string } }[] }).choices?.[0]
+        ?.message?.content ?? "",
+    inputTokens:
+      (data as { usage?: { prompt_tokens?: number } }).usage?.prompt_tokens ??
+      0,
+    outputTokens:
+      (data as { usage?: { completion_tokens?: number } }).usage
+        ?.completion_tokens ?? 0,
+  };
+}
+
+function failureResult(
+  modelId: ComparisonModelId,
+  latencyMs: number,
+  kind: ApiErrorKind,
+  message: string
+): ModelRunResult {
+  return {
+    modelId,
+    response: "",
+    inputTokens: 0,
+    outputTokens: 0,
+    latencyMs,
+    costUsd: 0,
+    error: message,
+    errorKind: kind,
   };
 }
 
@@ -109,15 +173,7 @@ export async function runComparisonModel(
   const model = COMPARISON_MODELS.find((m) => m.id === modelId);
 
   if (!model) {
-    return {
-      modelId,
-      response: "",
-      inputTokens: 0,
-      outputTokens: 0,
-      latencyMs: 0,
-      costUsd: 0,
-      error: "Unknown model",
-    };
+    return failureResult(modelId, 0, "unknown", "Unknown model");
   }
 
   try {
@@ -138,15 +194,21 @@ export async function runComparisonModel(
       costUsd: estimateCostUsd(modelId, inputTokens, outputTokens),
     };
   } catch (err) {
-    return {
+    if (err instanceof ProviderCallError) {
+      return failureResult(
+        modelId,
+        Date.now() - start,
+        err.kind,
+        err.message
+      );
+    }
+    const classified = classifyThrownError(err);
+    return failureResult(
       modelId,
-      response: "",
-      inputTokens: 0,
-      outputTokens: 0,
-      latencyMs: Date.now() - start,
-      costUsd: 0,
-      error: err instanceof Error ? err.message : "Request failed",
-    };
+      Date.now() - start,
+      classified.kind,
+      classified.message
+    );
   }
 }
 
@@ -161,6 +223,7 @@ export async function judgeComparisonOutputs(
       scores: {},
       latencyMs: 0,
       error: "No outputs to judge",
+      errorKind: "unknown",
     };
   }
 
@@ -193,7 +256,10 @@ Include only the model ids listed above.`;
 
     const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error("Judge did not return valid JSON");
+      throw new ProviderCallError(
+        "unknown",
+        "Judge did not return valid JSON"
+      );
     }
 
     const parsed = JSON.parse(jsonMatch[0]) as Record<string, number>;
@@ -211,10 +277,20 @@ Include only the model ids listed above.`;
       latencyMs: Date.now() - start,
     };
   } catch (err) {
+    if (err instanceof ProviderCallError) {
+      return {
+        scores: {},
+        latencyMs: Date.now() - start,
+        error: err.message,
+        errorKind: err.kind,
+      };
+    }
+    const classified = classifyThrownError(err);
     return {
       scores: {},
       latencyMs: Date.now() - start,
-      error: err instanceof Error ? err.message : "Judging failed",
+      error: classified.message,
+      errorKind: classified.kind,
     };
   }
 }

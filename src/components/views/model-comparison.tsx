@@ -1,7 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Crown, Info, KeyRound, Loader2 } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  Crown,
+  Info,
+  KeyRound,
+  Loader2,
+  WifiOff,
+} from "lucide-react";
 
 import {
   judgeComparisonOutputs,
@@ -17,12 +26,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   TASK_TYPES,
   type JudgeResult,
   type ModelRunResult,
   type TaskType,
 } from "@/lib/comparison-types";
+import type { ApiErrorKind } from "@/lib/api-errors";
 import {
   COMPARISON_MODELS,
   formatCostUsd,
@@ -74,7 +85,8 @@ export function ModelComparison() {
   const [judge, setJudge] = useState<JudgeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [judging, setJudging] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [hasCompared, setHasCompared] = useState(false);
 
   const { keys, isConnected } = useApiKeys();
   const hasAnthropic = isConnected("anthropic");
@@ -86,14 +98,21 @@ export function ModelComparison() {
     [results, judge]
   );
 
+  async function copyPrompt() {
+    if (!prompt.trim()) return;
+    await navigator.clipboard.writeText(prompt);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   async function runComparison() {
     if (!prompt.trim() || !canRun) return;
 
     setLoading(true);
     setJudging(false);
-    setError(null);
     setResults({});
     setJudge(null);
+    setHasCompared(true);
 
     try {
       const tasks = COMPARISON_MODELS.filter((model) =>
@@ -114,11 +133,6 @@ export function ModelComparison() {
       }
       setResults(nextResults);
 
-      const failures = runResults.filter((r) => r.error).map((r) => r.error!);
-      if (failures.length > 0) {
-        setError(failures.join("; "));
-      }
-
       const successful = runResults.filter((r) => !r.error && r.response);
       if (hasAnthropic && successful.length > 0) {
         setJudging(true);
@@ -132,16 +146,9 @@ export function ModelComparison() {
           })),
         });
         setJudge(judgeResult);
-        if (judgeResult.error) {
-          setError((prev) =>
-            prev
-              ? `${prev}; Judge: ${judgeResult.error}`
-              : `Judge: ${judgeResult.error}`
-          );
-        }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Comparison failed");
+    } catch {
+      // Individual model errors are captured per card
     } finally {
       setLoading(false);
       setJudging(false);
@@ -201,7 +208,29 @@ export function ModelComparison() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="compare-prompt">Prompt</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="compare-prompt">Prompt</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                disabled={!prompt.trim()}
+                onClick={copyPrompt}
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3 w-3" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3" />
+                    Copy prompt
+                  </>
+                )}
+              </Button>
+            </div>
             <textarea
               id="compare-prompt"
               className="flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -224,19 +253,16 @@ export function ModelComparison() {
               Add an Anthropic and/or OpenAI key in Settings to run comparisons.
             </p>
           )}
-
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
         </CardContent>
       </Card>
 
-      {(Object.keys(results).length > 0 || loading) && (
+      {(hasCompared || loading) && (
         <div className="grid gap-4 lg:grid-cols-3">
           {COMPARISON_MODELS.map((model) => {
             const connected = hasKeyForModel(model.id, keys);
             const result = results[model.id];
             const isWinner = winner === model.id;
+            const isLoadingCard = loading && connected && !result;
 
             return (
               <Card
@@ -274,14 +300,13 @@ export function ModelComparison() {
                         Add API key in Settings
                       </p>
                     </div>
-                  ) : loading && !result ? (
-                    <div className="flex flex-1 items-center justify-center py-10">
-                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
+                  ) : isLoadingCard ? (
+                    <ComparisonCardSkeleton />
                   ) : result?.error ? (
-                    <p className="text-sm text-red-600 dark:text-red-400">
-                      {result.error}
-                    </p>
+                    <ApiErrorState
+                      kind={result.errorKind ?? "unknown"}
+                      message={result.error}
+                    />
                   ) : result ? (
                     <>
                       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -370,6 +395,10 @@ export function ModelComparison() {
         </Card>
       )}
 
+      {judge?.error && (
+        <ApiErrorState kind={judge.errorKind ?? "unknown"} message={judge.error} />
+      )}
+
       {judging && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -377,11 +406,69 @@ export function ModelComparison() {
         </p>
       )}
 
-      {!hasAnthropic && Object.keys(results).length > 0 && (
+      {!hasAnthropic && hasCompared && !loading && (
         <p className="text-sm text-muted-foreground">
           Quality scoring skipped — Anthropic API key required for judging.
         </p>
       )}
+    </div>
+  );
+}
+
+function ComparisonCardSkeleton() {
+  return (
+    <div className="flex flex-1 flex-col gap-3">
+      <div className="grid grid-cols-2 gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-14 rounded-md" />
+        ))}
+      </div>
+      <Skeleton className="min-h-[200px] flex-1 rounded-md" />
+    </div>
+  );
+}
+
+function ApiErrorState({
+  kind,
+  message,
+}: {
+  kind: ApiErrorKind;
+  message: string;
+}) {
+  const Icon =
+    kind === "network"
+      ? WifiOff
+      : kind === "rate_limit"
+        ? Loader2
+        : AlertCircle;
+
+  const titles: Record<ApiErrorKind, string> = {
+    invalid_key: "Invalid API key",
+    rate_limit: "Rate limited",
+    network: "Network error",
+    unknown: "Request failed",
+  };
+
+  return (
+    <div
+      className={cn(
+        "flex flex-1 flex-col items-center justify-center gap-2 rounded-md border border-dashed px-4 py-10 text-center",
+        kind === "invalid_key" && "border-red-500/30 bg-red-500/5",
+        kind === "rate_limit" && "border-amber-500/30 bg-amber-500/5",
+        kind === "network" && "border-orange-500/30 bg-orange-500/5"
+      )}
+    >
+      <Icon
+        className={cn(
+          "h-5 w-5",
+          kind === "invalid_key" && "text-red-600 dark:text-red-400",
+          kind === "rate_limit" && "text-amber-600 dark:text-amber-400",
+          kind === "network" && "text-orange-600 dark:text-orange-400",
+          kind === "unknown" && "text-muted-foreground"
+        )}
+      />
+      <p className="text-sm font-medium">{titles[kind]}</p>
+      <p className="max-w-[220px] text-xs text-muted-foreground">{message}</p>
     </div>
   );
 }

@@ -33,8 +33,8 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
           <BarChart3 className="h-4 w-4" />
         </div>
         <div>
-          <h1 className="text-sm font-semibold tracking-tight">Model Lens</h1>
-          <p className="text-xs text-muted-foreground">AI model toolkit</p>
+          <h1 className="text-sm font-semibold tracking-tight">ModelLens</h1>
+          <p className="text-xs text-muted-foreground">Token & model tooling</p>
         </div>
       </div>
 
