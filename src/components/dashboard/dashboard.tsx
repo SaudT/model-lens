@@ -7,6 +7,7 @@ import { OnboardingBanner } from "./onboarding-banner";
 import { TokenAnalyzer } from "@/components/views/token-analyzer";
 import { ModelComparison } from "@/components/views/model-comparison";
 import { CostCalculator } from "@/components/views/cost-calculator";
+import { EvalsDashboard } from "@/components/views/evals-dashboard";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useApiKeys } from "@/hooks/use-api-keys";
 import { isOnboardingDismissed } from "@/lib/onboarding";
@@ -15,6 +16,7 @@ const VIEW_TITLES: Record<View, string> = {
   "token-analyzer": "Token Analyzer",
   "model-comparison": "Model Comparison",
   "cost-calculator": "Cost Calculator",
+  "evals-dashboard": "Evals Dashboard",
 };
 
 function ViewContent({ view }: { view: View }) {
@@ -25,6 +27,8 @@ function ViewContent({ view }: { view: View }) {
       return <ModelComparison />;
     case "cost-calculator":
       return <CostCalculator />;
+    case "evals-dashboard":
+      return <EvalsDashboard />;
   }
 }
 

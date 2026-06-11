@@ -25,6 +25,12 @@ ModelLens helps you make informed decisions about which model to use for a workl
 - Task profiles preset realistic usage patterns
 - **No API key required**
 
+### Evals Dashboard
+- Heatmap of average judge scores by model × task type
+- Cost vs quality scatter plot from a committed eval snapshot
+- Per-task-type model recommendations
+- **No API key required** (displays snapshot data; re-run evals via CLI to refresh)
+
 ---
 
 ## Getting started
@@ -129,6 +135,54 @@ Judging is skipped entirely if no Anthropic key is configured.
 
 ---
 
+## Evals system
+
+ModelLens includes a batch eval pipeline for systematic model comparison across 20 curated prompts.
+
+### What's in `/evals`
+
+| File | Purpose |
+|------|---------|
+| `prompts.json` | 20 prompts (5 per task type) with `id`, `task_type`, `prompt`, and `success_criteria` |
+| `run_evals.ts` | CLI script that runs all prompts against three models and judges each response |
+| `results.csv` | Output from the last eval run (60 rows = 20 prompts × 3 models) |
+| `env.eval.example` | Template for API keys — copy to `.env.eval` at project root |
+
+### Methodology
+
+1. **Prompt suite** — Each prompt has explicit success criteria (e.g. "must return valid JSON with fields X, Y, Z").
+2. **Model execution** — For each prompt, models run **in sequence**: `claude-haiku-4-5` → `claude-sonnet-4-6` → `gpt-4o-mini`. Each uses the same task-type system instruction as Model Comparison.
+3. **LLM-as-judge** — After each response, **Claude Sonnet 4.6** evaluates the output against the prompt's `success_criteria` and returns JSON: `{"score": 1-10, "pass": boolean}`. Pass defaults to `score >= 7` when criteria are substantially met.
+4. **Metrics recorded** — Input/output tokens, estimated cost (hardcoded pricing), latency, score, pass/fail.
+5. **Dashboard snapshot** — The Evals Dashboard reads a hardcoded CSV snapshot in `src/lib/evals-snapshot.ts` (kept in sync with `evals/results.csv`).
+
+### How to re-run evals
+
+```bash
+# 1. Create .env.eval at project root (gitignored)
+cp evals/env.eval.example .env.eval
+# Edit .env.eval — add ANTHROPIC_API_KEY and OPENAI_API_KEY
+
+# 2. Run the eval suite (~60 API calls; expect ~$0.50–2.00 depending on output length)
+npm run evals
+
+# 3. Refresh the dashboard snapshot
+# Copy the contents of evals/results.csv into the SNAPSHOT_CSV constant
+# in src/lib/evals-snapshot.ts
+```
+
+The eval runner writes progress to stdout and saves `evals/results.csv`. Re-running overwrites the previous results.
+
+**Note:** Evals use `.env.eval` (CLI-only). This is separate from the browser localStorage keys used by Model Comparison — evals are intended for offline batch runs from your terminal.
+
+### Reading the dashboard
+
+- **Heatmap** — Average judge score per model and task type. Greener cells = higher scores.
+- **Cost vs quality scatter** — Each point is a model's average across all 20 prompts. Ideal models sit top-left (high quality, low cost).
+- **Recommendations** — Per task type, the model with the best cost-efficiency (`avgScore / avgCost`) in the snapshot, with a plain-language rationale.
+
+---
+
 ## What I learned
 
 Building ModelLens surfaced a few non-obvious patterns in token economics:
@@ -159,6 +213,7 @@ Building ModelLens surfaced a few non-obvious patterns in token economics:
 | `npm run build` | Production build |
 | `npm run start` | Run production server |
 | `npm run lint` | ESLint |
+| `npm run evals` | Run batch eval suite (requires `.env.eval`) |
 
 ## License
 
