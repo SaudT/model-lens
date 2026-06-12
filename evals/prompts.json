@@ -1,0 +1,124 @@
+{
+  "prompts": [
+    {
+      "id": "sum-01",
+      "task_type": "summarization",
+      "prompt": "Summarize the following article in 3 bullet points:\n\nThe James Webb Space Telescope detected water vapor in the atmosphere of a rocky exoplanet 26 light-years away. The planet, K2-18b, orbits within its star's habitable zone. Scientists caution that water alone does not confirm habitability, but the finding represents a major step in the search for life beyond Earth. The observation used transit spectroscopy during a 40-hour window in 2024.",
+      "success_criteria": "Response must be exactly 3 bullet points covering: (1) water vapor detection, (2) planet location/habitability zone context, (3) scientific significance with appropriate caution about habitability claims."
+    },
+    {
+      "id": "sum-02",
+      "task_type": "summarization",
+      "prompt": "Summarize this meeting transcript in 2-3 sentences:\n\nAlice: We need to ship the auth refactor by Friday. Bob: The OAuth migration is 80% done but refresh token rotation is blocked on legal review. Carol: Can we ship without rotation and patch next sprint? Alice: Only if we feature-flag it to internal users. Bob: Agreed. Carol: I'll update the risk register.",
+      "success_criteria": "Captures the Friday deadline, OAuth migration status, legal blocker on token rotation, and the feature-flag compromise for internal-only release."
+    },
+    {
+      "id": "sum-03",
+      "task_type": "summarization",
+      "prompt": "Provide a one-paragraph executive summary of this quarterly report excerpt:\n\nQ3 revenue grew 18% YoY to $142M. Gross margin improved 2.1 points to 71%. Operating expenses rose 12% due to R&D hiring. Net retention reached 118%. The company repurchased $20M in shares. Guidance for Q4 revenue is $148-152M.",
+      "success_criteria": "Single paragraph mentioning revenue growth with figure, margin improvement, expense increase cause, net retention, buyback, and Q4 guidance range."
+    },
+    {
+      "id": "sum-04",
+      "task_type": "summarization",
+      "prompt": "Summarize the key arguments from both sides in 4 bullet points (2 pro, 2 con):\n\nDebate topic: Four-day work week. Proponents cite productivity gains in Iceland trials and reduced burnout. They argue output per hour increases when rest improves focus. Opponents warn of customer coverage gaps in global support teams. They also cite higher per-day labor costs for shift-based manufacturing.",
+      "success_criteria": "Four bullets clearly labeled or distinguishable as 2 pro and 2 con arguments, accurately reflecting the source material without adding unsupported claims."
+    },
+    {
+      "id": "sum-05",
+      "task_type": "summarization",
+      "prompt": "Summarize this product changelog for non-technical stakeholders in under 75 words:\n\nv2.4.0: Added SAML SSO with Okta and Azure AD. Deprecated legacy API keys (removal in v3.0). Fixed race condition in webhook retry queue causing duplicate events. Improved p99 latency on /search from 840ms to 210ms via index partitioning.",
+      "success_criteria": "Under 75 words, mentions SSO support, API key deprecation timeline, bug fix for duplicate webhooks, and search speed improvement in plain language."
+    },
+    {
+      "id": "code-01",
+      "task_type": "code-generation",
+      "prompt": "Write a Python function `is_palindrome(s: str) -> bool` that returns True if the string is a palindrome, ignoring case and non-alphanumeric characters.",
+      "success_criteria": "Correct Python function with type hint, handles 'A man, a plan, a canal: Panama' as True, strips punctuation and ignores case."
+    },
+    {
+      "id": "code-02",
+      "task_type": "code-generation",
+      "prompt": "Write a TypeScript function that debounces a callback: `debounce<T extends (...args: unknown[]) => void>(fn: T, delayMs: number): T`. Include cancel support via a `.cancel()` method on the returned function.",
+      "success_criteria": "Valid TypeScript with generic signature, delays invocation, resets timer on repeated calls, and exposes cancel() that clears pending invocation."
+    },
+    {
+      "id": "code-03",
+      "task_type": "code-generation",
+      "prompt": "Write a SQL query that returns the top 3 products by revenue per category for 2024. Tables: orders(order_id, product_id, amount, order_date), products(product_id, name, category_id), categories(category_id, name).",
+      "success_criteria": "Uses window function (RANK or ROW_NUMBER) or equivalent subquery, filters 2024, partitions by category, limits to top 3 per category, returns category and product names."
+    },
+    {
+      "id": "code-04",
+      "task_type": "code-generation",
+      "prompt": "Implement a React hook `useLocalStorage<T>(key: string, initialValue: T)` that syncs state to localStorage and handles JSON parse errors gracefully by falling back to initialValue.",
+      "success_criteria": "Returns [value, setValue] tuple, reads from localStorage on mount, writes on update, try/catch around JSON.parse with fallback to initialValue."
+    },
+    {
+      "id": "code-05",
+      "task_type": "code-generation",
+      "prompt": "Write a Bash script that finds all `.env` files in a directory tree (max depth 4), prints their paths, and warns if any contain the string 'password=' without quotes.",
+      "success_criteria": "Uses find with depth limit, loops results, greps for password= pattern, prints warning messages for matches, executable script structure."
+    },
+    {
+      "id": "reas-01",
+      "task_type": "reasoning",
+      "prompt": "A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How much does the ball cost? Show your reasoning step by step.",
+      "success_criteria": "Correct answer: ball costs $0.05 (5 cents). Must show algebraic setup (bat = ball + 1.00, ball + bat = 1.10) and not the common wrong answer of $0.10."
+    },
+    {
+      "id": "reas-02",
+      "task_type": "reasoning",
+      "prompt": "You have a 3-gallon jug and a 5-gallon jug. How do you measure exactly 4 gallons of water? Explain each pour step.",
+      "success_criteria": "Valid sequence of pours ending with exactly 4 gallons in one jug. Common solution: fill 5, pour into 3 leaving 2, empty 3, pour 2 into 3, fill 5, pour 1 into 3 leaving 4 in the 5-gallon jug."
+    },
+    {
+      "id": "reas-03",
+      "task_type": "reasoning",
+      "prompt": "Three switches outside a room control three bulbs inside. You may enter the room only once. How do you determine which switch controls which bulb?",
+      "success_criteria": "Uses heat as additional signal: turn switch 1 on for several minutes, off; turn switch 2 on; enter room. Hot-off bulb = switch 1, lit bulb = switch 2, cold-off bulb = switch 3."
+    },
+    {
+      "id": "reas-04",
+      "task_type": "reasoning",
+      "prompt": "If all bloops are razzies and all razzies are lazzies, are all bloops definitely lazzies? Could some lazzies be bloops? Answer both questions with logical reasoning.",
+      "success_criteria": "Yes, all bloops are lazzies (syllogism). No, not all lazzies need be bloops (lazzies is a superset). Explains transitive inclusion correctly."
+    },
+    {
+      "id": "reas-05",
+      "task_type": "reasoning",
+      "prompt": "A farmer needs to cross a river with a wolf, a goat, and a cabbage. The boat fits one item plus the farmer. Wolf eats goat, goat eats cabbage if left alone. List a valid crossing sequence.",
+      "success_criteria": "Valid sequence where wolf and goat are never left alone, nor goat and cabbage. Classic solution: take goat first, return, take wolf, bring goat back, take cabbage, return, take goat."
+    },
+    {
+      "id": "ext-01",
+      "task_type": "data-extraction",
+      "prompt": "Extract all email addresses and phone numbers from this text as JSON:\n\nContact sales at sales@acme.io or call +1 (415) 555-0192. Support: help@acme.io, tel: 415-555-0193. CEO Maria Chen <maria.chen@acme.io>.",
+      "success_criteria": "Valid JSON with arrays of emails [sales@acme.io, help@acme.io, maria.chen@acme.io] and phone numbers in normalized or original format."
+    },
+    {
+      "id": "ext-02",
+      "task_type": "data-extraction",
+      "prompt": "Extract invoice line items as JSON array with fields: item, quantity, unit_price, total.\n\nInvoice #8821\n- Widget A  x3  @ $12.50  = $37.50\n- Widget B  x1  @ $45.00  = $45.00\n- Shipping       @ $5.00   = $5.00",
+      "success_criteria": "JSON array of 3 objects with correct item names, quantities (3, 1, 1 or shipping as qty 1), unit prices, and totals matching source."
+    },
+    {
+      "id": "ext-03",
+      "task_type": "data-extraction",
+      "prompt": "Parse this resume snippet into JSON: {\"name\", \"skills\", \"years_experience\", \"companies\"}:\n\nJane Doe | Senior Engineer | 8 years experience\nSkills: Python, Kubernetes, PostgreSQL\nPreviously at Stripe (2020-2024) and Dropbox (2017-2020)",
+      "success_criteria": "JSON with name Jane Doe, skills array with Python/Kubernetes/PostgreSQL, years_experience 8, companies array including Stripe and Dropbox with date ranges."
+    },
+    {
+      "id": "ext-04",
+      "task_type": "data-extraction",
+      "prompt": "Extract event details as JSON with fields: title, date, location, speakers (array).\n\nEvent: ML Ops Summit 2025\nDate: March 15, 2025\nVenue: Moscone Center, San Francisco\nSpeakers: Dr. Amy Liu (Keynote), James Park (Panel), Sarah Okonkwo (Workshop)",
+      "success_criteria": "JSON object with title ML Ops Summit 2025, date March 15 2025, location Moscone Center San Francisco, speakers array with 3 named entries."
+    },
+    {
+      "id": "ext-05",
+      "task_type": "data-extraction",
+      "prompt": "Extract structured data from this log line as JSON: timestamp, level, service, message, request_id.\n\n2025-06-11T14:32:01.442Z ERROR payment-service request_id=req_8f2a payment failed: insufficient funds user=8821",
+      "success_criteria": "JSON with timestamp 2025-06-11T14:32:01.442Z, level ERROR, service payment-service, message describing payment failure, request_id req_8f2a."
+    }
+  ]
+}

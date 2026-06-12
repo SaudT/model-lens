@@ -3,6 +3,7 @@
 import {
   BarChart3,
   Calculator,
+  FlaskConical,
   Layers,
   ScanSearch,
 } from "lucide-react";
@@ -12,12 +13,17 @@ import { Separator } from "@/components/ui/separator";
 import { ApiKeySettings, ProviderStatus } from "./api-key-settings";
 import { cn } from "@/lib/utils";
 
-export type View = "token-analyzer" | "model-comparison" | "cost-calculator";
+export type View =
+  | "token-analyzer"
+  | "model-comparison"
+  | "cost-calculator"
+  | "evals-dashboard";
 
 const NAV_ITEMS: { id: View; label: string; icon: React.ElementType }[] = [
   { id: "token-analyzer", label: "Token Analyzer", icon: ScanSearch },
   { id: "model-comparison", label: "Model Comparison", icon: Layers },
   { id: "cost-calculator", label: "Cost Calculator", icon: Calculator },
+  { id: "evals-dashboard", label: "Evals Dashboard", icon: FlaskConical },
 ];
 
 interface SidebarProps {
@@ -33,8 +39,8 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
           <BarChart3 className="h-4 w-4" />
         </div>
         <div>
-          <h1 className="text-sm font-semibold tracking-tight">Model Lens</h1>
-          <p className="text-xs text-muted-foreground">AI model toolkit</p>
+          <h1 className="text-sm font-semibold tracking-tight">ModelLens</h1>
+          <p className="text-xs text-muted-foreground">Token & model tooling</p>
         </div>
       </div>
 

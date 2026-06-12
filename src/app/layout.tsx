@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Model Lens",
-  description: "AI model toolkit — token analysis, comparison, and cost estimation",
+  title: "ModelLens",
+  description:
+    "LLM token analytics & model selection tooling — tokenize, compare, and estimate costs",
 };
 
 export default function RootLayout({
