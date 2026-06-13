@@ -4,6 +4,7 @@ import {
   TASK_INSTRUCTIONS,
   type JudgeResult,
   type ModelRunResult,
+  type QualityReasons,
   type QualityScores,
   type TaskType,
 } from "@/lib/comparison-types";
@@ -19,6 +20,33 @@ import {
 } from "@/lib/model-pricing";
 
 const JUDGE_MODEL: ComparisonModelId = "claude-sonnet-4-6";
+const MAX_REASON_LENGTH = 200;
+
+function normalizeReason(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.length > MAX_REASON_LENGTH
+    ? trimmed.slice(0, MAX_REASON_LENGTH).trim()
+    : trimmed;
+}
+
+function parseJudgeEntry(value: unknown): {
+  score?: number;
+  reason?: string;
+} {
+  if (typeof value === "number") {
+    return { score: value };
+  }
+
+  if (value && typeof value === "object" && "score" in value) {
+    const entry = value as { score?: unknown; reason?: unknown };
+    const score = typeof entry.score === "number" ? entry.score : undefined;
+    return { score, reason: normalizeReason(entry.reason) };
+  }
+
+  return {};
+}
 
 type RunModelParams = {
   modelId: ComparisonModelId;
@@ -221,6 +249,7 @@ export async function judgeComparisonOutputs(
   if (outputs.length === 0) {
     return {
       scores: {},
+      reasons: {},
       latencyMs: 0,
       error: "No outputs to judge",
       errorKind: "unknown",
@@ -232,7 +261,17 @@ export async function judgeComparisonOutputs(
     .map((o) => `### ${o.modelId}\n${o.response || "(empty response)"}`)
     .join("\n\n");
 
-  const judgePrompt = `You are an impartial evaluator. Rate each model output for the task type "${taskLabel}" on a scale of 1-10 (10 = excellent).
+  const judgePrompt = `You are an impartial evaluator. Rate each model output for the task type "${taskLabel}" on a scale of 1-10.
+
+Scoring rubric (use the full range — do not cluster scores unless outputs are genuinely equivalent):
+- 9-10: Excellent — fully satisfies the task with no meaningful gaps
+- 7-8: Good — meets the task with minor issues
+- 5-6: Partial — usable but missing important elements
+- 1-4: Poor — fails the task
+
+Compare outputs relative to each other. Spread scores when quality clearly differs.
+
+For each model, include a "reason": exactly one sentence (max ~25 words) citing a concrete strength or gap — do not restate the score.
 
 Original prompt:
 ${prompt}
@@ -240,8 +279,8 @@ ${prompt}
 Model outputs:
 ${outputBlock}
 
-Return ONLY valid JSON mapping each model id to its integer score. Example:
-{"claude-haiku-4-5": 7, "claude-sonnet-4-6": 9, "gpt-4o-mini": 8}
+Return ONLY valid JSON mapping each model id to an object with "score" (integer 1-10) and "reason" (one sentence). Example:
+{"claude-haiku-4-5": {"score": 7, "reason": "Concise summary but omitted the deadline."}, "claude-sonnet-4-6": {"score": 9, "reason": "Complete and well-structured with all key facts."}, "gpt-4o-mini": {"score": 8, "reason": "Accurate overall; slightly verbose opening."}}
 
 Include only the model ids listed above.`;
 
@@ -251,7 +290,7 @@ Include only the model ids listed above.`;
       apiKey,
       "You evaluate LLM outputs fairly and return JSON only.",
       judgePrompt,
-      256
+      512
     );
 
     const jsonMatch = result.text.match(/\{[\s\S]*\}/);
@@ -262,24 +301,34 @@ Include only the model ids listed above.`;
       );
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as Record<string, number>;
+    const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
     const scores: QualityScores = {};
+    const reasons: QualityReasons = {};
 
     for (const { modelId } of outputs) {
-      const score = parsed[modelId];
-      if (typeof score === "number" && score >= 1 && score <= 10) {
-        scores[modelId] = score;
+      const entry = parseJudgeEntry(parsed[modelId]);
+      if (
+        typeof entry.score === "number" &&
+        entry.score >= 1 &&
+        entry.score <= 10
+      ) {
+        scores[modelId] = entry.score;
+      }
+      if (entry.reason) {
+        reasons[modelId] = entry.reason;
       }
     }
 
     return {
       scores,
+      reasons,
       latencyMs: Date.now() - start,
     };
   } catch (err) {
     if (err instanceof ProviderCallError) {
       return {
         scores: {},
+        reasons: {},
         latencyMs: Date.now() - start,
         error: err.message,
         errorKind: err.kind,
@@ -288,6 +337,7 @@ Include only the model ids listed above.`;
     const classified = classifyThrownError(err);
     return {
       scores: {},
+      reasons: {},
       latencyMs: Date.now() - start,
       error: classified.message,
       errorKind: classified.kind,

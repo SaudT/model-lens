@@ -78,7 +78,7 @@ Providers bill in **tokens**, not words or characters. Each request has two mete
 - Whitespace and punctuation (leading spaces are often part of a token)
 - Images, PDFs, and long system prompts in agentic workflows
 
-ModelLens uses **hardcoded per-million-token rates** in the Cost Calculator and Comparison view. These are estimates for planning — check provider pricing pages for current rates.
+ModelLens uses **hardcoded per-million-token list prices** in `src/lib/model-pricing.ts` (single registry with source URLs and last-verified dates). The Cost Calculator derives its model list from the same file. These are planning estimates — check provider pricing pages for current rates.
 
 **Cost formula (per request):**
 

@@ -17,10 +17,24 @@ const Slider = React.forwardRef<
     )}
     {...props}
   >
-    <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-muted">
-      <SliderPrimitive.Range className="absolute h-full bg-foreground/70" />
+    <SliderPrimitive.Track className="relative h-2.5 w-full grow overflow-hidden rounded-full border border-border/60 bg-muted">
+      <SliderPrimitive.Range className="absolute h-full rounded-full bg-foreground/80" />
     </SliderPrimitive.Track>
-    <SliderPrimitive.Thumb className="block h-4 w-4 rounded-full border border-border bg-background shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50" />
+    <SliderPrimitive.Thumb
+      className={cn(
+        "relative flex h-6 w-6 cursor-grab items-center justify-center gap-[3px] rounded-full",
+        "border-2 border-background bg-foreground shadow-md ring-2 ring-foreground/20",
+        "transition-[box-shadow,transform]",
+        "hover:scale-110 hover:shadow-lg hover:ring-foreground/35",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "active:cursor-grabbing active:scale-105",
+        "disabled:pointer-events-none disabled:opacity-50"
+      )}
+    >
+      <span className="h-2 w-0.5 rounded-full bg-background/90" aria-hidden />
+      <span className="h-2 w-0.5 rounded-full bg-background/90" aria-hidden />
+      <span className="h-2 w-0.5 rounded-full bg-background/90" aria-hidden />
+    </SliderPrimitive.Thumb>
   </SliderPrimitive.Root>
 ));
 Slider.displayName = SliderPrimitive.Root.displayName;

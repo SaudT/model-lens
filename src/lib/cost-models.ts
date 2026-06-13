@@ -1,10 +1,10 @@
-export type CostModelId =
-  | "claude-haiku-4-5"
-  | "claude-sonnet-4-6"
-  | "claude-opus-4-6"
-  | "gpt-4o-mini"
-  | "gpt-4o"
-  | "gemini-1.5-flash";
+import {
+  MODEL_PRICING,
+  type CostModelId,
+  type ModelPricingEntry,
+} from "@/lib/model-pricing";
+
+export type { CostModelId } from "@/lib/model-pricing";
 
 export type TaskProfileId =
   | "high-volume-simple"
@@ -12,65 +12,22 @@ export type TaskProfileId =
   | "complex-reasoning"
   | "agentic";
 
-export type CostModel = {
-  id: CostModelId;
-  label: string;
-  provider: string;
-  inputPer1M: number;
-  outputPer1M: number;
-  useCase: string;
-};
+export type CostModel = Pick<
+  ModelPricingEntry,
+  "id" | "label" | "provider" | "inputPer1M" | "outputPer1M" | "useCase"
+> & { id: CostModelId; useCase: string };
 
-export const COST_MODELS: CostModel[] = [
-  {
-    id: "claude-haiku-4-5",
-    label: "Claude Haiku 4.5",
-    provider: "Anthropic",
-    inputPer1M: 1.0,
-    outputPer1M: 5.0,
-    useCase: "High-volume routing, classification, simple extraction",
-  },
-  {
-    id: "claude-sonnet-4-6",
-    label: "Claude Sonnet 4.6",
-    provider: "Anthropic",
-    inputPer1M: 3.0,
-    outputPer1M: 15.0,
-    useCase: "Balanced production workloads, coding, analysis",
-  },
-  {
-    id: "claude-opus-4-6",
-    label: "Claude Opus 4.6",
-    provider: "Anthropic",
-    inputPer1M: 15.0,
-    outputPer1M: 75.0,
-    useCase: "Complex reasoning, critical quality, research",
-  },
-  {
-    id: "gpt-4o-mini",
-    label: "GPT-4o Mini",
-    provider: "OpenAI",
-    inputPer1M: 0.15,
-    outputPer1M: 0.6,
-    useCase: "Budget OpenAI workloads at scale",
-  },
-  {
-    id: "gpt-4o",
-    label: "GPT-4o",
-    provider: "OpenAI",
-    inputPer1M: 2.5,
-    outputPer1M: 10.0,
-    useCase: "Multimodal tasks, strong general-purpose quality",
-  },
-  {
-    id: "gemini-1.5-flash",
-    label: "Gemini 1.5 Flash",
-    provider: "Google",
-    inputPer1M: 0.075,
-    outputPer1M: 0.3,
-    useCase: "High-volume Google stack, long-context chat",
-  },
-];
+export const COST_MODELS: CostModel[] = MODEL_PRICING.filter(
+  (model): model is ModelPricingEntry & { useCase: string } =>
+    model.useCase != null
+).map(({ id, label, provider, inputPer1M, outputPer1M, useCase }) => ({
+  id,
+  label,
+  provider,
+  inputPer1M,
+  outputPer1M,
+  useCase,
+}));
 
 export const TASK_PROFILES: {
   id: TaskProfileId;

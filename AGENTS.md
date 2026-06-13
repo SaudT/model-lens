@@ -56,8 +56,8 @@ src/
     api-keys.ts              # STORAGE_KEY, get/save/mask helpers
     api-errors.ts            # classifyApiError (invalid_key, rate_limit, network)
     tokenizer.ts             # cl100k_base tokenize + content samples
-    model-pricing.ts         # Comparison model pricing (3 models)
-    cost-models.ts           # Cost calculator pricing (6 models)
+    model-pricing.ts         # Single pricing registry (6 models + sources)
+    cost-models.ts           # Cost calculator profiles + computeModelCosts
     comparison-types.ts      # TaskType, instructions, result types
     evals-snapshot.ts        # Hardcoded CSV snapshot for Evals Dashboard
     onboarding.ts            # Banner dismiss persistence
@@ -85,13 +85,13 @@ evals/
 ## Server actions (Model Comparison)
 
 - `runComparisonModel({ modelId, prompt, taskType, apiKey })` — calls Anthropic or OpenAI via `fetch`
-- `judgeComparisonOutputs({ prompt, taskType, apiKey, outputs })` — Sonnet 4.6 judge, returns JSON scores
+- `judgeComparisonOutputs({ prompt, taskType, apiKey, outputs })` — Sonnet 4.6 judge; returns `JudgeResult` with `scores` (1–10) and `reasons` (one sentence per model)
 
 Models: `claude-haiku-4-5`, `claude-sonnet-4-6`, `gpt-4o-mini`.
 
 Errors return structured `errorKind`: `invalid_key` | `rate_limit` | `network` | `unknown` via `classifyApiError`.
 
-Cost-efficiency winner: `qualityScore / costUsd` (highest wins "Best value" badge).
+Best quality: highest judge score. Best value: cheapest model within 1 point of the top score (`src/lib/comparison-scoring.ts`).
 
 ## Task types
 
@@ -103,12 +103,13 @@ System instructions: `TASK_INSTRUCTIONS` in `src/lib/comparison-types.ts`.
 
 ## Pricing
 
-Hardcoded per-million-token rates — not live from providers.
+Hardcoded per-million-token **list prices** in `src/lib/model-pricing.ts` — not live from providers.
 
-- **3 models** → `src/lib/model-pricing.ts` (comparison + evals)
-- **6 models** → `src/lib/cost-models.ts` (cost calculator)
+- **`MODEL_PRICING`** — single registry with `source.url`, `source.lastVerified`, and rates for all 6 models
+- **`COMPARISON_MODELS`** — subset with `keyProvider` (3 models for comparison + evals)
+- **`cost-models.ts`** — derives `COST_MODELS` from `MODEL_PRICING`; task profiles and monthly math only
 
-Update both files if pricing changes; keep formulas consistent.
+When provider pricing changes: update rates in `MODEL_PRICING`, bump `source.lastVerified`, and reconcile `PRICING_LAST_REVIEWED`. Standard tier only (no batch/cache discounts).
 
 ## Evals system
 

@@ -1,5 +1,9 @@
-import type { ComparisonModelId } from "@/lib/model-pricing";
 import type { TaskType } from "@/lib/comparison-types";
+import {
+  computeBestValue,
+  QUALITY_VALUE_GATE,
+} from "@/lib/comparison-scoring";
+import type { ComparisonModelId } from "@/lib/model-pricing";
 
 export type EvalResult = {
   prompt_id: string;
@@ -251,21 +255,19 @@ export function getTaskRecommendations(): TaskRecommendation[] {
       );
     }
 
-    let recommended: ComparisonModelId = EVAL_MODELS[0];
-    let bestEfficiency = -1;
-
+    const avgCosts = {} as Partial<
+      Record<ComparisonModelId, { costUsd: number }>
+    >;
     for (const model of EVAL_MODELS) {
       const modelRows = subset.filter((r) => r.model === model);
-      const avgScore =
-        modelRows.reduce((s, r) => s + r.score, 0) / modelRows.length;
-      const avgCost =
-        modelRows.reduce((s, r) => s + r.cost_usd, 0) / modelRows.length;
-      const efficiency = avgScore / (avgCost * 1000);
-      if (efficiency > bestEfficiency) {
-        bestEfficiency = efficiency;
-        recommended = model;
-      }
+      avgCosts[model] = {
+        costUsd:
+          modelRows.reduce((s, r) => s + r.cost_usd, 0) / modelRows.length,
+      };
     }
+
+    const recommended =
+      computeBestValue(avgCosts, scores) ?? EVAL_MODELS[0];
 
     return {
       task_type,
@@ -273,7 +275,7 @@ export function getTaskRecommendations(): TaskRecommendation[] {
       recommended,
       reason:
         reasons[task_type][recommended] ??
-        "Best cost-efficiency score in the eval snapshot.",
+        `Cheapest model within ${QUALITY_VALUE_GATE} point of the top average score.`,
       scores,
     };
   });

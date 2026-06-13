@@ -9,6 +9,7 @@ import {
   Info,
   KeyRound,
   Loader2,
+  Sparkles,
   WifiOff,
 } from "lucide-react";
 
@@ -39,10 +40,23 @@ import {
   formatCostUsd,
   type ComparisonModelId,
 } from "@/lib/model-pricing";
+import {
+  computeBestQuality,
+  computeBestValue,
+  isValueEligible,
+  QUALITY_VALUE_GATE,
+} from "@/lib/comparison-scoring";
 import { useApiKeys } from "@/hooks/use-api-keys";
 import { cn } from "@/lib/utils";
 
 const JUDGE_MODEL = "claude-sonnet-4-6";
+
+const TASK_DESCRIPTIONS: Record<TaskType, string> = {
+  summarization: "Concise summaries that preserve key facts",
+  "code-generation": "Clean code that satisfies the request",
+  reasoning: "Step-by-step logic before the conclusion",
+  "data-extraction": "Structured output in a machine-readable format",
+};
 
 type ResultMap = Partial<Record<ComparisonModelId, ModelRunResult>>;
 
@@ -53,29 +67,6 @@ function hasKeyForModel(
   const model = COMPARISON_MODELS.find((m) => m.id === modelId);
   if (!model) return false;
   return Boolean(keys[model.keyProvider]?.trim());
-}
-
-function computeWinner(
-  results: ResultMap,
-  scores: JudgeResult["scores"]
-): ComparisonModelId | null {
-  let best: ComparisonModelId | null = null;
-  let bestEfficiency = -1;
-
-  for (const model of COMPARISON_MODELS) {
-    const result = results[model.id];
-    const score = scores[model.id];
-    if (!result || result.error || score == null || result.costUsd <= 0) {
-      continue;
-    }
-    const efficiency = score / result.costUsd;
-    if (efficiency > bestEfficiency) {
-      bestEfficiency = efficiency;
-      best = model.id;
-    }
-  }
-
-  return best;
 }
 
 export function ModelComparison() {
@@ -93,8 +84,12 @@ export function ModelComparison() {
   const hasOpenAI = isConnected("openai");
   const canRun = hasAnthropic || hasOpenAI;
 
-  const winner = useMemo(
-    () => (judge ? computeWinner(results, judge.scores) : null),
+  const bestQuality = useMemo(
+    () => (judge ? computeBestQuality(judge.scores) : null),
+    [judge]
+  );
+  const bestValue = useMemo(
+    () => (judge ? computeBestValue(results, judge.scores) : null),
     [results, judge]
   );
 
@@ -179,31 +174,65 @@ export function ModelComparison() {
         <CardHeader>
           <CardTitle>Prompt</CardTitle>
           <CardDescription>
-            Choose a task type and enter a prompt to compare models.
+            Click a task type, then enter a prompt to compare models.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Task type
-            </span>
-            <div className="inline-flex flex-wrap rounded-md border bg-muted/40 p-0.5">
-              {TASK_TYPES.map(({ id, label }) => (
-                <Button
-                  key={id}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className={cn(
-                    "h-7 px-3 text-xs",
-                    taskType === id &&
-                      "bg-background shadow-sm hover:bg-background"
-                  )}
-                  onClick={() => setTaskType(id)}
-                >
-                  {label}
-                </Button>
-              ))}
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Task type
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Selected:{" "}
+                <span className="font-medium text-foreground">
+                  {TASK_TYPES.find((t) => t.id === taskType)?.label}
+                </span>
+              </span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {TASK_TYPES.map(({ id, label }) => {
+                const isSelected = taskType === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setTaskType(id)}
+                    className={cn(
+                      "group cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-all",
+                      "hover:border-foreground/25 hover:bg-muted/40 hover:shadow-sm",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      isSelected
+                        ? "border-foreground/40 bg-muted/60 shadow-sm ring-2 ring-foreground/15"
+                        : "border-border border-dashed"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium">{label}</p>
+                      {isSelected && (
+                        <Check
+                          className="h-4 w-4 shrink-0 text-foreground"
+                          aria-hidden
+                        />
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {TASK_DESCRIPTIONS[id]}
+                    </p>
+                    {!isSelected && (
+                      <span className="mt-2 inline-block text-[10px] font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                        Click to select
+                      </span>
+                    )}
+                    {isSelected && (
+                      <span className="mt-2 inline-block text-[10px] font-medium text-foreground">
+                        Active
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -261,7 +290,8 @@ export function ModelComparison() {
           {COMPARISON_MODELS.map((model) => {
             const connected = hasKeyForModel(model.id, keys);
             const result = results[model.id];
-            const isWinner = winner === model.id;
+            const isBestQuality = bestQuality === model.id;
+            const isBestValue = bestValue === model.id;
             const isLoadingCard = loading && connected && !result;
 
             return (
@@ -270,7 +300,8 @@ export function ModelComparison() {
                 className={cn(
                   "relative flex flex-col",
                   !connected && "opacity-50",
-                  isWinner && "ring-2 ring-amber-500/60"
+                  (isBestQuality || isBestValue) &&
+                    "ring-2 ring-amber-500/60"
                 )}
               >
                 <CardHeader className="pb-3">
@@ -281,15 +312,26 @@ export function ModelComparison() {
                         {model.id}
                       </CardDescription>
                     </div>
-                    {isWinner && (
-                      <Badge
-                        variant="secondary"
-                        className="shrink-0 gap-1 bg-amber-500/15 text-amber-700 dark:text-amber-400"
-                      >
-                        <Crown className="h-3 w-3" />
-                        Best value
-                      </Badge>
-                    )}
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {isBestQuality && (
+                        <Badge
+                          variant="secondary"
+                          className="gap-1 bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                        >
+                          <Crown className="h-3 w-3" />
+                          Best quality
+                        </Badge>
+                      )}
+                      {isBestValue && (
+                        <Badge
+                          variant="secondary"
+                          className="gap-1 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          Best value
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="flex flex-1 flex-col gap-3">
@@ -349,7 +391,10 @@ export function ModelComparison() {
             <CardDescription>
               Rated 1–10 by {JUDGE_MODEL} for{" "}
               {TASK_TYPES.find((t) => t.id === taskType)?.label.toLowerCase()}{" "}
-              ({judge.latencyMs.toLocaleString()} ms)
+              ({judge.latencyMs.toLocaleString()} ms). Includes one-sentence
+              rationale per model. Best value goes to the cheapest model scoring
+              within {QUALITY_VALUE_GATE} point
+              {QUALITY_VALUE_GATE === 1 ? "" : "s"} of the top.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -357,10 +402,9 @@ export function ModelComparison() {
               {COMPARISON_MODELS.map((model) => {
                 const score = judge.scores[model.id];
                 const result = results[model.id];
-                const efficiency =
-                  score != null && result && result.costUsd > 0
-                    ? score / result.costUsd
-                    : null;
+                const valueEligible =
+                  score != null &&
+                  isValueEligible(judge.scores, model.id);
 
                 return (
                   <div
@@ -382,9 +426,16 @@ export function ModelComparison() {
                         "—"
                       )}
                     </p>
-                    {efficiency != null && (
-                      <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                        efficiency: {efficiency.toFixed(0)} pts/$
+                    {judge.reasons[model.id] && (
+                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                        {judge.reasons[model.id]}
+                      </p>
+                    )}
+                    {score != null && result && !result.error && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {valueEligible
+                          ? "Eligible for best value"
+                          : "Below quality threshold for value"}
                       </p>
                     )}
                   </div>

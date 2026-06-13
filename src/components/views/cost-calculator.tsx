@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Info, KeyRound } from "lucide-react";
+import { Check, GripVertical, Info, KeyRound } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -28,6 +28,7 @@ import {
   formatCost,
   type TaskProfileId,
 } from "@/lib/cost-models";
+import { PRICING_LAST_REVIEWED } from "@/lib/model-pricing";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_PROFILE: TaskProfileId = "balanced";
@@ -39,9 +40,11 @@ const SLIDER_LIMITS = {
   outputTokens: { min: 50, max: 16_000, step: 50 },
 };
 
-const PRICING_CALLOUT = `Providers bill separately for input tokens (your prompt, system message, and conversation history) and output tokens (the model's generated response). Output is typically priced 3–5× higher because generation requires sequential sampling and more compute per token.
+const PRICING_CALLOUT = `Providers bill separately for input tokens (your prompt, system message, and conversation history) and output tokens (the model's generated response). Output is typically priced 3–5× more per token than input — that is a dollar rate, not a token count. Generation is compute-heavy because the model produces tokens one at a time.
 
-Token count depends on text length, formatting (code and JSON use more tokens per word), tokenizer choice, and whether you send images or tool definitions. Use the Token Analyzer to inspect real payloads.`;
+Token count depends on text length, formatting (code and JSON use more tokens per word), tokenizer choice, and whether you send images or tool definitions. Use the Token Analyzer to inspect real payloads.
+
+Rates are hardcoded list prices (last verified ${PRICING_LAST_REVIEWED}) — see src/lib/model-pricing.ts for sources. Actual bills may differ with caching, batch API, or tier changes.`;
 
 function shortModelName(id: string): string {
   return id
@@ -117,29 +120,53 @@ export function CostCalculator() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Task profile</CardTitle>
           <CardDescription>
-            Preset slider values to realistic defaults for common workloads.
+            Click a profile to apply preset values to the sliders below.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            {TASK_PROFILES.map((profile) => (
-              <button
-                key={profile.id}
-                type="button"
-                onClick={() => applyProfile(profile.id)}
-                className={cn(
-                  "rounded-lg border px-3 py-2.5 text-left transition-colors",
-                  taskProfile === profile.id
-                    ? "border-foreground/30 bg-muted/60"
-                    : "border-border hover:bg-muted/30"
-                )}
-              >
-                <p className="text-sm font-medium">{profile.label}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {profile.description}
-                </p>
-              </button>
-            ))}
+            {TASK_PROFILES.map((profile) => {
+              const isSelected = taskProfile === profile.id;
+              return (
+                <button
+                  key={profile.id}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => applyProfile(profile.id)}
+                  className={cn(
+                    "group relative cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-all",
+                    "hover:border-foreground/25 hover:bg-muted/40 hover:shadow-sm",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    isSelected
+                      ? "border-foreground/40 bg-muted/60 shadow-sm ring-2 ring-foreground/15"
+                      : "border-border border-dashed"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium">{profile.label}</p>
+                    {isSelected && (
+                      <Check
+                        className="h-4 w-4 shrink-0 text-foreground"
+                        aria-hidden
+                      />
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {profile.description}
+                  </p>
+                  <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+                    {profile.dailyRequests.toLocaleString()} req/day ·{" "}
+                    {profile.inputTokens.toLocaleString()} in /{" "}
+                    {profile.outputTokens.toLocaleString()} out
+                  </p>
+                  {!isSelected && (
+                    <span className="mt-2 inline-block text-[10px] font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                      Click to apply
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -148,7 +175,8 @@ export function CostCalculator() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Usage assumptions</CardTitle>
           <CardDescription>
-            Adjust daily volume and average token counts per request.
+            Drag the sliders to adjust daily volume and average token counts
+            per request.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
@@ -186,8 +214,8 @@ export function CostCalculator() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[280px] w-full min-w-0 shrink-0">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
               <BarChart
                 data={chartData}
                 margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
@@ -313,20 +341,32 @@ function SliderField({
   onChange: (value: number) => void;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-baseline justify-between">
-        <Label>{label}</Label>
+    <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
+      <div className="flex items-baseline justify-between gap-4">
+        <div>
+          <Label>{label}</Label>
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <GripVertical className="h-3 w-3 shrink-0" aria-hidden />
+            Drag slider to adjust
+          </p>
+        </div>
         <span className="font-mono text-sm font-semibold tabular-nums">
           {display}
         </span>
       </div>
-      <Slider
-        min={limits.min}
-        max={limits.max}
-        step={limits.step}
-        value={[value]}
-        onValueChange={([next]) => onChange(next)}
-      />
+      <div className="px-1 py-2">
+        <Slider
+          min={limits.min}
+          max={limits.max}
+          step={limits.step}
+          value={[value]}
+          onValueChange={(values) => {
+            const next = values[0];
+            if (next != null && next !== value) onChange(next);
+          }}
+          aria-label={label}
+        />
+      </div>
       <div className="flex justify-between text-[10px] text-muted-foreground">
         <span>{limits.min.toLocaleString()}</span>
         <span>{limits.max.toLocaleString()}</span>

@@ -43,7 +43,7 @@ export function ApiKeySettings() {
     if (open) {
       setDraft({});
     }
-  }, [open, keys]);
+  }, [open]);
 
   function handleSave(provider: Provider) {
     const value = draft[provider]?.trim();
