@@ -44,6 +44,13 @@ import { cn } from "@/lib/utils";
 
 const JUDGE_MODEL = "claude-sonnet-4-6";
 
+const TASK_DESCRIPTIONS: Record<TaskType, string> = {
+  summarization: "Concise summaries that preserve key facts",
+  "code-generation": "Clean code that satisfies the request",
+  reasoning: "Step-by-step logic before the conclusion",
+  "data-extraction": "Structured output in a machine-readable format",
+};
+
 type ResultMap = Partial<Record<ComparisonModelId, ModelRunResult>>;
 
 function hasKeyForModel(
@@ -179,31 +186,65 @@ export function ModelComparison() {
         <CardHeader>
           <CardTitle>Prompt</CardTitle>
           <CardDescription>
-            Choose a task type and enter a prompt to compare models.
+            Click a task type, then enter a prompt to compare models.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Task type
-            </span>
-            <div className="inline-flex flex-wrap rounded-md border bg-muted/40 p-0.5">
-              {TASK_TYPES.map(({ id, label }) => (
-                <Button
-                  key={id}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className={cn(
-                    "h-7 px-3 text-xs",
-                    taskType === id &&
-                      "bg-background shadow-sm hover:bg-background"
-                  )}
-                  onClick={() => setTaskType(id)}
-                >
-                  {label}
-                </Button>
-              ))}
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Task type
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Selected:{" "}
+                <span className="font-medium text-foreground">
+                  {TASK_TYPES.find((t) => t.id === taskType)?.label}
+                </span>
+              </span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {TASK_TYPES.map(({ id, label }) => {
+                const isSelected = taskType === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setTaskType(id)}
+                    className={cn(
+                      "group cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-all",
+                      "hover:border-foreground/25 hover:bg-muted/40 hover:shadow-sm",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      isSelected
+                        ? "border-foreground/40 bg-muted/60 shadow-sm ring-2 ring-foreground/15"
+                        : "border-border border-dashed"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium">{label}</p>
+                      {isSelected && (
+                        <Check
+                          className="h-4 w-4 shrink-0 text-foreground"
+                          aria-hidden
+                        />
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {TASK_DESCRIPTIONS[id]}
+                    </p>
+                    {!isSelected && (
+                      <span className="mt-2 inline-block text-[10px] font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                        Click to select
+                      </span>
+                    )}
+                    {isSelected && (
+                      <span className="mt-2 inline-block text-[10px] font-medium text-foreground">
+                        Active
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
