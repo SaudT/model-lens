@@ -38,8 +38,11 @@ export type ModelRunResult = {
 
 export type QualityScores = Partial<Record<ComparisonModelId, number>>;
 
+export type QualityReasons = Partial<Record<ComparisonModelId, string>>;
+
 export type JudgeResult = {
   scores: QualityScores;
+  reasons: QualityReasons;
   latencyMs: number;
   error?: string;
   errorKind?: ApiErrorKind;

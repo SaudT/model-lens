@@ -391,8 +391,9 @@ export function ModelComparison() {
             <CardDescription>
               Rated 1–10 by {JUDGE_MODEL} for{" "}
               {TASK_TYPES.find((t) => t.id === taskType)?.label.toLowerCase()}{" "}
-              ({judge.latencyMs.toLocaleString()} ms). Best value goes to the
-              cheapest model scoring within {QUALITY_VALUE_GATE} point
+              ({judge.latencyMs.toLocaleString()} ms). Includes one-sentence
+              rationale per model. Best value goes to the cheapest model scoring
+              within {QUALITY_VALUE_GATE} point
               {QUALITY_VALUE_GATE === 1 ? "" : "s"} of the top.
             </CardDescription>
           </CardHeader>
@@ -425,6 +426,11 @@ export function ModelComparison() {
                         "—"
                       )}
                     </p>
+                    {judge.reasons[model.id] && (
+                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                        {judge.reasons[model.id]}
+                      </p>
+                    )}
                     {score != null && result && !result.error && (
                       <p className="mt-1 text-[11px] text-muted-foreground">
                         {valueEligible

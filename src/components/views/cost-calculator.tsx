@@ -28,6 +28,7 @@ import {
   formatCost,
   type TaskProfileId,
 } from "@/lib/cost-models";
+import { PRICING_LAST_REVIEWED } from "@/lib/model-pricing";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_PROFILE: TaskProfileId = "balanced";
@@ -41,7 +42,9 @@ const SLIDER_LIMITS = {
 
 const PRICING_CALLOUT = `Providers bill separately for input tokens (your prompt, system message, and conversation history) and output tokens (the model's generated response). Output is typically priced 3–5× more per token than input — that is a dollar rate, not a token count. Generation is compute-heavy because the model produces tokens one at a time.
 
-Token count depends on text length, formatting (code and JSON use more tokens per word), tokenizer choice, and whether you send images or tool definitions. Use the Token Analyzer to inspect real payloads.`;
+Token count depends on text length, formatting (code and JSON use more tokens per word), tokenizer choice, and whether you send images or tool definitions. Use the Token Analyzer to inspect real payloads.
+
+Rates are hardcoded list prices (last verified ${PRICING_LAST_REVIEWED}) — see src/lib/model-pricing.ts for sources. Actual bills may differ with caching, batch API, or tier changes.`;
 
 function shortModelName(id: string): string {
   return id
