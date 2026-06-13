@@ -8,6 +8,14 @@ import {
   saveApiKeys,
 } from "@/lib/api-keys";
 
+function keysEqual(a: ApiKeys, b: ApiKeys): boolean {
+  return (
+    (a.anthropic ?? "") === (b.anthropic ?? "") &&
+    (a.openai ?? "") === (b.openai ?? "") &&
+    (a.gemini ?? "") === (b.gemini ?? "")
+  );
+}
+
 export function useApiKeys() {
   const [keys, setKeys] = useState<ApiKeys>({});
   const [loaded, setLoaded] = useState(false);
@@ -30,7 +38,10 @@ export function useApiKeys() {
 
   useEffect(() => {
     function handleKeysUpdated() {
-      setKeys(getApiKeys());
+      setKeys((prev) => {
+        const next = getApiKeys();
+        return keysEqual(prev, next) ? prev : next;
+      });
     }
     window.addEventListener("modelLens:keys-updated", handleKeysUpdated);
     return () =>

@@ -211,8 +211,8 @@ export function CostCalculator() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[280px] w-full min-w-0 shrink-0">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
               <BarChart
                 data={chartData}
                 margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
@@ -357,7 +357,10 @@ function SliderField({
           max={limits.max}
           step={limits.step}
           value={[value]}
-          onValueChange={([next]) => onChange(next)}
+          onValueChange={(values) => {
+            const next = values[0];
+            if (next != null && next !== value) onChange(next);
+          }}
           aria-label={label}
         />
       </div>

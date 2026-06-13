@@ -145,8 +145,8 @@ export function EvalsDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[300px] w-full min-w-0 shrink-0">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
               <ScatterChart margin={{ top: 12, right: 24, bottom: 8, left: 8 }}>
                 <CartesianGrid
                   strokeDasharray="3 3"
