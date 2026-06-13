@@ -232,7 +232,15 @@ export async function judgeComparisonOutputs(
     .map((o) => `### ${o.modelId}\n${o.response || "(empty response)"}`)
     .join("\n\n");
 
-  const judgePrompt = `You are an impartial evaluator. Rate each model output for the task type "${taskLabel}" on a scale of 1-10 (10 = excellent).
+  const judgePrompt = `You are an impartial evaluator. Rate each model output for the task type "${taskLabel}" on a scale of 1-10.
+
+Scoring rubric (use the full range — do not cluster scores unless outputs are genuinely equivalent):
+- 9-10: Excellent — fully satisfies the task with no meaningful gaps
+- 7-8: Good — meets the task with minor issues
+- 5-6: Partial — usable but missing important elements
+- 1-4: Poor — fails the task
+
+Compare outputs relative to each other. Spread scores when quality clearly differs.
 
 Original prompt:
 ${prompt}

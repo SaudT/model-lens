@@ -9,6 +9,7 @@ import {
   Info,
   KeyRound,
   Loader2,
+  Sparkles,
   WifiOff,
 } from "lucide-react";
 
@@ -39,6 +40,12 @@ import {
   formatCostUsd,
   type ComparisonModelId,
 } from "@/lib/model-pricing";
+import {
+  computeBestQuality,
+  computeBestValue,
+  isValueEligible,
+  QUALITY_VALUE_GATE,
+} from "@/lib/comparison-scoring";
 import { useApiKeys } from "@/hooks/use-api-keys";
 import { cn } from "@/lib/utils";
 
@@ -62,29 +69,6 @@ function hasKeyForModel(
   return Boolean(keys[model.keyProvider]?.trim());
 }
 
-function computeWinner(
-  results: ResultMap,
-  scores: JudgeResult["scores"]
-): ComparisonModelId | null {
-  let best: ComparisonModelId | null = null;
-  let bestEfficiency = -1;
-
-  for (const model of COMPARISON_MODELS) {
-    const result = results[model.id];
-    const score = scores[model.id];
-    if (!result || result.error || score == null || result.costUsd <= 0) {
-      continue;
-    }
-    const efficiency = score / result.costUsd;
-    if (efficiency > bestEfficiency) {
-      bestEfficiency = efficiency;
-      best = model.id;
-    }
-  }
-
-  return best;
-}
-
 export function ModelComparison() {
   const [prompt, setPrompt] = useState("");
   const [taskType, setTaskType] = useState<TaskType>("summarization");
@@ -100,8 +84,12 @@ export function ModelComparison() {
   const hasOpenAI = isConnected("openai");
   const canRun = hasAnthropic || hasOpenAI;
 
-  const winner = useMemo(
-    () => (judge ? computeWinner(results, judge.scores) : null),
+  const bestQuality = useMemo(
+    () => (judge ? computeBestQuality(judge.scores) : null),
+    [judge]
+  );
+  const bestValue = useMemo(
+    () => (judge ? computeBestValue(results, judge.scores) : null),
     [results, judge]
   );
 
@@ -302,7 +290,8 @@ export function ModelComparison() {
           {COMPARISON_MODELS.map((model) => {
             const connected = hasKeyForModel(model.id, keys);
             const result = results[model.id];
-            const isWinner = winner === model.id;
+            const isBestQuality = bestQuality === model.id;
+            const isBestValue = bestValue === model.id;
             const isLoadingCard = loading && connected && !result;
 
             return (
@@ -311,7 +300,8 @@ export function ModelComparison() {
                 className={cn(
                   "relative flex flex-col",
                   !connected && "opacity-50",
-                  isWinner && "ring-2 ring-amber-500/60"
+                  (isBestQuality || isBestValue) &&
+                    "ring-2 ring-amber-500/60"
                 )}
               >
                 <CardHeader className="pb-3">
@@ -322,15 +312,26 @@ export function ModelComparison() {
                         {model.id}
                       </CardDescription>
                     </div>
-                    {isWinner && (
-                      <Badge
-                        variant="secondary"
-                        className="shrink-0 gap-1 bg-amber-500/15 text-amber-700 dark:text-amber-400"
-                      >
-                        <Crown className="h-3 w-3" />
-                        Best value
-                      </Badge>
-                    )}
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {isBestQuality && (
+                        <Badge
+                          variant="secondary"
+                          className="gap-1 bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                        >
+                          <Crown className="h-3 w-3" />
+                          Best quality
+                        </Badge>
+                      )}
+                      {isBestValue && (
+                        <Badge
+                          variant="secondary"
+                          className="gap-1 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          Best value
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="flex flex-1 flex-col gap-3">
@@ -390,7 +391,9 @@ export function ModelComparison() {
             <CardDescription>
               Rated 1–10 by {JUDGE_MODEL} for{" "}
               {TASK_TYPES.find((t) => t.id === taskType)?.label.toLowerCase()}{" "}
-              ({judge.latencyMs.toLocaleString()} ms)
+              ({judge.latencyMs.toLocaleString()} ms). Best value goes to the
+              cheapest model scoring within {QUALITY_VALUE_GATE} point
+              {QUALITY_VALUE_GATE === 1 ? "" : "s"} of the top.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -398,10 +401,9 @@ export function ModelComparison() {
               {COMPARISON_MODELS.map((model) => {
                 const score = judge.scores[model.id];
                 const result = results[model.id];
-                const efficiency =
-                  score != null && result && result.costUsd > 0
-                    ? score / result.costUsd
-                    : null;
+                const valueEligible =
+                  score != null &&
+                  isValueEligible(judge.scores, model.id);
 
                 return (
                   <div
@@ -423,9 +425,11 @@ export function ModelComparison() {
                         "—"
                       )}
                     </p>
-                    {efficiency != null && (
-                      <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                        efficiency: {efficiency.toFixed(0)} pts/$
+                    {score != null && result && !result.error && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {valueEligible
+                          ? "Eligible for best value"
+                          : "Below quality threshold for value"}
                       </p>
                     )}
                   </div>
