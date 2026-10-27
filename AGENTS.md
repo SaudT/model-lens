@@ -162,3 +162,19 @@ No Python venv. Node/npm only.
 2. Add id to `View` type and `NAV_ITEMS` in `sidebar.tsx`.
 3. Add case in `dashboard.tsx` `ViewContent` and `VIEW_TITLES`.
 4. Update `README.md` features section if user-facing.
+
+## Extraction Lab (current primary workflow)
+
+The app now opens on `extraction-lab`. This is the main product direction; the four original tools are supporting/legacy views. Keep client-side sidebar navigation. Visited views stay mounted to preserve drafts.
+
+- `src/lib/extraction/dataset.ts`: versioned synthetic text invoices, references, schema.
+- `scoring.ts`: strict deterministic grading and independent rules baseline.
+- `experiment.ts`: artifact types, dataset hash, metrics and validated import.
+- `ollama.ts`: fixed-loopback local inference; selected model must already be installed.
+- `src/app/actions/extraction.ts`: bounded case-based server action, disabled unless `MODELLENS_ENABLE_OLLAMA=1`.
+- `src/components/views/extraction-lab.tsx`: browser runner, checkpoints, evidence inspection.
+- `evals/run_extraction.ts`: free CLI runner and findings report; no `.env.eval` or judge.
+
+Bump dataset/prompt/scorer versions when their semantics change. Never pass reference answers to inference or fabricate benchmark measurements. Local API fees are zero but hardware/electricity are unmeasured. Treat interrupted, truncated, and failed requests distinctly. The legacy demo snapshot must remain labeled unverified.
+
+Run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build` after changes. Do not run the legacy paid eval CLI unless paid calls are explicitly requested.

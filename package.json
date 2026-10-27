@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "evals": "tsx evals/run_evals.ts"
+    "evals": "tsx evals/run_evals.ts",
+    "evals:extraction": "node --import tsx evals/run_extraction.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",

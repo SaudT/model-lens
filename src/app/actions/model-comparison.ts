@@ -82,6 +82,7 @@ async function callAnthropic(
   try {
     res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
+      signal: AbortSignal.timeout(60_000),
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
@@ -116,6 +117,8 @@ async function callAnthropic(
 
   return {
     text,
+    finishReason: (data as { stop_reason?: string }).stop_reason ?? "unknown",
+    complete: ["end_turn", "stop_sequence"].includes((data as { stop_reason?: string }).stop_reason ?? ""),
     inputTokens:
       (data as { usage?: { input_tokens?: number } }).usage?.input_tokens ?? 0,
     outputTokens:
@@ -134,6 +137,7 @@ async function callOpenAI(
   try {
     res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
+      signal: AbortSignal.timeout(60_000),
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
@@ -162,6 +166,8 @@ async function callOpenAI(
   }
 
   return {
+    finishReason: (data as { choices?: { finish_reason?: string }[] }).choices?.[0]?.finish_reason ?? "unknown",
+    complete: (data as { choices?: { finish_reason?: string }[] }).choices?.[0]?.finish_reason === "stop",
     text:
       (data as { choices?: { message?: { content?: string } }[] }).choices?.[0]
         ?.message?.content ?? "",
@@ -200,8 +206,8 @@ export async function runComparisonModel(
   const system = TASK_INSTRUCTIONS[taskType];
   const model = COMPARISON_MODELS.find((m) => m.id === modelId);
 
-  if (!model) {
-    return failureResult(modelId, 0, "unknown", "Unknown model");
+  if (!model || typeof prompt !== "string" || !prompt.trim() || prompt.length > 50_000 || !Object.hasOwn(TASK_INSTRUCTIONS, taskType) || typeof apiKey !== "string" || !apiKey.trim() || apiKey.length > 512) {
+    return failureResult(modelId, 0, "unknown", "Invalid comparison parameters");
   }
 
   try {
@@ -216,6 +222,8 @@ export async function runComparisonModel(
     return {
       modelId,
       response: result.text,
+      complete: result.complete,
+      finishReason: result.finishReason,
       inputTokens,
       outputTokens,
       latencyMs: Date.now() - start,
@@ -246,12 +254,12 @@ export async function judgeComparisonOutputs(
   const { prompt, taskType, apiKey, outputs } = params;
   const start = Date.now();
 
-  if (outputs.length === 0) {
+  if (!Array.isArray(outputs) || outputs.length === 0 || outputs.length > 3 || typeof prompt !== "string" || prompt.length > 50_000 || !Object.hasOwn(TASK_INSTRUCTIONS, taskType) || typeof apiKey !== "string" || !apiKey.trim() || apiKey.length > 512 || outputs.some(o => !COMPARISON_MODELS.some(m => m.id === o.modelId) || typeof o.response !== "string" || o.response.length > 50_000)) {
     return {
       scores: {},
       reasons: {},
       latencyMs: 0,
-      error: "No outputs to judge",
+      error: "Invalid judge parameters",
       errorKind: "unknown",
     };
   }
@@ -293,6 +301,7 @@ Include only the model ids listed above.`;
       512
     );
 
+    if (!result.complete) throw new ProviderCallError("unknown", "Judge response was incomplete");
     const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new ProviderCallError(
@@ -309,6 +318,7 @@ Include only the model ids listed above.`;
       const entry = parseJudgeEntry(parsed[modelId]);
       if (
         typeof entry.score === "number" &&
+        Number.isInteger(entry.score) &&
         entry.score >= 1 &&
         entry.score <= 10
       ) {

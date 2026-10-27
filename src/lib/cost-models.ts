@@ -19,7 +19,7 @@ export type CostModel = Pick<
 
 export const COST_MODELS: CostModel[] = MODEL_PRICING.filter(
   (model): model is ModelPricingEntry & { useCase: string } =>
-    model.useCase != null
+    model.useCase != null && model.id !== "gemini-1.5-flash"
 ).map(({ id, label, provider, inputPer1M, outputPer1M, useCase }) => ({
   id,
   label,

@@ -42,3 +42,5 @@ next-env.d.ts
 
 # questions
 questions.txt
+# Local extraction experiments (export deliberately when sharing)
+/evals/runs/

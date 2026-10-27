@@ -1,52 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import {
-  type ApiKeys,
-  type Provider,
-  getApiKeys,
-  saveApiKeys,
-} from "@/lib/api-keys";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { type ApiKeys, type Provider, STORAGE_KEY, saveApiKeys } from "@/lib/api-keys";
 
-function keysEqual(a: ApiKeys, b: ApiKeys): boolean {
-  return (
-    (a.anthropic ?? "") === (b.anthropic ?? "") &&
-    (a.openai ?? "") === (b.openai ?? "") &&
-    (a.gemini ?? "") === (b.gemini ?? "")
-  );
+function subscribe(listener: () => void) {
+  window.addEventListener("modelLens:keys-updated", listener);
+  window.addEventListener("storage", listener);
+  return () => { window.removeEventListener("modelLens:keys-updated", listener); window.removeEventListener("storage", listener); };
 }
-
+function snapshot(): string {
+  try { return localStorage.getItem(STORAGE_KEY) ?? "{}"; } catch { return "{}"; }
+}
 export function useApiKeys() {
-  const [keys, setKeys] = useState<ApiKeys>({});
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    setKeys(getApiKeys());
-    setLoaded(true);
-  }, []);
-
+  const raw = useSyncExternalStore(subscribe, snapshot, () => null);
+  const keys = useMemo<ApiKeys>(() => {
+    try {
+      const value: unknown = JSON.parse(raw ?? "{}");
+      if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+      return Object.fromEntries(Object.entries(value).filter(([key, value]) => ["anthropic", "openai", "gemini"].includes(key) && typeof value === "string"));
+    } catch { return {}; }
+  }, [raw]);
   const updateKeys = useCallback((next: ApiKeys) => {
     saveApiKeys(next);
-    setKeys(next);
-    window.dispatchEvent(new CustomEvent("modelLens:keys-updated"));
+    window.dispatchEvent(new Event("modelLens:keys-updated"));
   }, []);
-
-  const isConnected = useCallback(
-    (provider: Provider) => Boolean(keys[provider]?.trim()),
-    [keys]
-  );
-
-  useEffect(() => {
-    function handleKeysUpdated() {
-      setKeys((prev) => {
-        const next = getApiKeys();
-        return keysEqual(prev, next) ? prev : next;
-      });
-    }
-    window.addEventListener("modelLens:keys-updated", handleKeysUpdated);
-    return () =>
-      window.removeEventListener("modelLens:keys-updated", handleKeysUpdated);
-  }, []);
-
-  return { keys, loaded, updateKeys, isConnected };
+  const isConnected = useCallback((provider: Provider) => Boolean(keys[provider]?.trim()), [keys]);
+  return { keys, loaded: raw !== null, updateKeys, isConnected };
 }

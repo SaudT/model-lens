@@ -12,6 +12,7 @@ function getEncoder(): Tiktoken {
 
 export type TokenChip = {
   id: number;
+  ids: number[];
   text: string;
   index: number;
 };
@@ -67,17 +68,29 @@ Margin: 34.8%`,
 export function tokenize(text: string): TokenChip[] {
   if (!text) return [];
   const enc = getEncoder();
-  const ids = enc.encode(text);
-  return ids.map((id, index) => ({
-    id,
-    text: enc.decode([id]),
-    index,
-  }));
+  const ids = enc.encode(text, [], []);
+  const chips: TokenChip[] = [];
+  let pending: number[] = [];
+  let start = 0;
+  for (let index = 0; index < ids.length; index++) {
+    pending.push(ids[index]);
+    const decoded = enc.decode(pending);
+    const roundTrip = enc.encode(decoded, [], []);
+    // A UTF-8 character can span token boundaries. Group those tokens rather
+    // than independently decoding incomplete byte fragments as U+FFFD.
+    if (roundTrip.length === pending.length && roundTrip.every((id, i) => id === pending[i])) {
+      chips.push({ id: pending[0], ids: pending, text: decoded, index: start });
+      pending = [];
+      start = index + 1;
+    }
+  }
+  if (pending.length) chips.push({ id: pending[0], ids: pending, text: enc.decode(pending), index: start });
+  return chips;
 }
 
 export function countTokens(text: string): number {
   if (!text) return 0;
-  return getEncoder().encode(text).length;
+  return getEncoder().encode(text, [], []).length;
 }
 
 export function countWords(text: string): number {

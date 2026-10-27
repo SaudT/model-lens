@@ -128,7 +128,7 @@ export function ModelComparison() {
       }
       setResults(nextResults);
 
-      const successful = runResults.filter((r) => !r.error && r.response);
+      const successful = runResults.filter((r) => !r.error && r.response && r.complete !== false);
       if (hasAnthropic && successful.length > 0) {
         setJudging(true);
         const judgeResult = await judgeComparisonOutputs({
@@ -143,7 +143,7 @@ export function ModelComparison() {
         setJudge(judgeResult);
       }
     } catch {
-      // Individual model errors are captured per card
+      setJudge({ scores: {}, reasons: {}, latencyMs: 0, error: "Comparison request failed. Please retry.", errorKind: "network" });
     } finally {
       setLoading(false);
       setJudging(false);
@@ -165,7 +165,7 @@ export function ModelComparison() {
       <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
         <Info className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
-          Your API keys are passed directly to each provider. Estimated cost for
+          Your API keys pass through the ModelLens server to each provider. Estimated cost for
           this comparison: ~$0.01
         </p>
       </div>
@@ -198,7 +198,8 @@ export function ModelComparison() {
                     key={id}
                     type="button"
                     aria-pressed={isSelected}
-                    onClick={() => setTaskType(id)}
+                    disabled={loading}
+                    onClick={() => { setTaskType(id); setResults({}); setJudge(null); setHasCompared(false); }}
                     className={cn(
                       "group cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-all",
                       "hover:border-foreground/25 hover:bg-muted/40 hover:shadow-sm",
@@ -265,7 +266,8 @@ export function ModelComparison() {
               className="flex min-h-[120px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               placeholder="Enter a prompt to compare models..."
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              disabled={loading}
+              onChange={(e) => { setPrompt(e.target.value); setResults({}); setJudge(null); setHasCompared(false); }}
             />
           </div>
 
@@ -370,6 +372,7 @@ export function ModelComparison() {
                           mono
                         />
                       </div>
+                      {result.complete === false && <p role="status" className="text-xs text-amber-700">Incomplete response ({result.finishReason}). Excluded from judging and value selection.</p>}
                       <div className="max-h-[320px] flex-1 overflow-auto rounded-md border bg-muted/20 p-3">
                         <p className="whitespace-pre-wrap text-sm leading-relaxed">
                           {result.response || "(empty response)"}
@@ -393,7 +396,7 @@ export function ModelComparison() {
               {TASK_TYPES.find((t) => t.id === taskType)?.label.toLowerCase()}{" "}
               ({judge.latencyMs.toLocaleString()} ms). Includes one-sentence
               rationale per model. Best value goes to the cheapest model scoring
-              within {QUALITY_VALUE_GATE} point
+              at least 7/10 and within {QUALITY_VALUE_GATE} point
               {QUALITY_VALUE_GATE === 1 ? "" : "s"} of the top.
             </CardDescription>
           </CardHeader>

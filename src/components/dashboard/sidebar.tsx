@@ -14,16 +14,18 @@ import { ApiKeySettings, ProviderStatus } from "./api-key-settings";
 import { cn } from "@/lib/utils";
 
 export type View =
+  | "extraction-lab"
   | "token-analyzer"
   | "model-comparison"
   | "cost-calculator"
   | "evals-dashboard";
 
 const NAV_ITEMS: { id: View; label: string; icon: React.ElementType }[] = [
+  { id: "extraction-lab", label: "Extraction Lab", icon: FlaskConical },
   { id: "token-analyzer", label: "Token Analyzer", icon: ScanSearch },
   { id: "model-comparison", label: "Model Comparison", icon: Layers },
   { id: "cost-calculator", label: "Cost Calculator", icon: Calculator },
-  { id: "evals-dashboard", label: "Evals Dashboard", icon: FlaskConical },
+  { id: "evals-dashboard", label: "Legacy Evals (Demo)", icon: FlaskConical },
 ];
 
 interface SidebarProps {
@@ -33,20 +35,21 @@ interface SidebarProps {
 
 export function Sidebar({ activeView, onViewChange }: SidebarProps) {
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r bg-card">
-      <div className="flex items-center gap-2 px-6 py-5">
+    <aside className="flex w-full shrink-0 flex-col border-b bg-card md:h-full md:w-64 md:border-b-0 md:border-r">
+      <div className="flex items-center gap-2 px-4 py-3 md:px-6 md:py-5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <BarChart3 className="h-4 w-4" />
         </div>
         <div>
           <h1 className="text-sm font-semibold tracking-tight">ModelLens</h1>
-          <p className="text-xs text-muted-foreground">Token & model tooling</p>
+          <p className="text-xs text-muted-foreground">Workload evaluation</p>
         </div>
       </div>
 
+      <div className="px-4 pb-2 md:hidden"><ApiKeySettings /></div>
       <Separator />
 
-      <nav className="flex-1 space-y-1 p-4">
+      <nav aria-label="Tools" className="flex gap-1 overflow-x-auto p-2 md:block md:flex-1 md:space-y-1 md:p-4">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;
@@ -55,7 +58,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
               key={item.id}
               variant={isActive ? "secondary" : "ghost"}
               className={cn(
-                "w-full justify-start gap-2",
+                "shrink-0 justify-start gap-2 md:w-full",
                 isActive && "bg-secondary"
               )}
               onClick={() => onViewChange(item.id)}
@@ -67,7 +70,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         })}
       </nav>
 
-      <div className="space-y-4 p-4">
+      <div className="hidden space-y-4 p-4 md:block">
         <ProviderStatus />
         <ApiKeySettings />
       </div>

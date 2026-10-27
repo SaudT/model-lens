@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, KeyRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -39,12 +39,6 @@ export function ApiKeySettings() {
   const [draft, setDraft] = useState<ApiKeys>({});
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (open) {
-      setDraft({});
-    }
-  }, [open]);
-
   function handleSave(provider: Provider) {
     const value = draft[provider]?.trim();
     if (!value) return;
@@ -59,7 +53,7 @@ export function ApiKeySettings() {
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={(next) => { if (next) setDraft({}); setOpen(next); }}>
       <SheetTrigger asChild>
         <Button variant="outline" className="w-full justify-start gap-2">
           <KeyRound className="h-4 w-4" />
@@ -77,8 +71,9 @@ export function ApiKeySettings() {
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <p>
-            Keys are stored locally in your browser and never sent to any server
-            except the respective AI provider.
+            Saved keys persist in this browser. When you run a paid comparison,
+            keys pass through the ModelLens app server to the selected provider.
+            Extraction Lab does not use these keys.
           </p>
         </div>
 
@@ -96,7 +91,7 @@ export function ApiKeySettings() {
                       {provider.label}
                     </Label>
                     <Badge variant={connected ? "success" : "danger"}>
-                      {connected ? "connected" : "not set"}
+                      {connected ? "key saved (unverified)" : "not set"}
                     </Badge>
                   </div>
 
