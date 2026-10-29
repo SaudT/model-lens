@@ -28,6 +28,8 @@ export const TASK_INSTRUCTIONS: Record<TaskType, string> = {
 export type ModelRunResult = {
   modelId: ComparisonModelId;
   response: string;
+  complete?: boolean;
+  finishReason?: string;
   inputTokens: number;
   outputTokens: number;
   latencyMs: number;

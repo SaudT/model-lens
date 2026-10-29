@@ -1,220 +1,144 @@
 # ModelLens
 
-**LLM token analytics & model selection tooling** — a local-first dashboard for understanding how text tokenizes, comparing model outputs side by side, and estimating API spend before you ship.
+**Which model meets your extraction quality, latency, and cost targets?**
 
-ModelLens helps you make informed decisions about which model to use for a workload, how much it will cost, and how tokenization affects your bill. Two of the three tools run entirely in the browser with no API keys. Model Comparison calls provider APIs directly using keys you store locally.
+ModelLens is a local-first evaluation workbench for extracting structured invoice data. It compares a transparent rules baseline with local and hosted language models, validates their answers against known references, and exposes the failures behind the aggregate scores.
 
-## Features
+The goal is to practice and demonstrate AI evaluation: establish a baseline, define correctness, control experiment settings, inspect failure modes, and explain tradeoffs with evidence. The baseline and local models need no paid API; hosted models use your provider key and may incur charges. Grading never requires an LLM judge.
 
-### Token Analyzer
-- Paste any text and visualize `cl100k_base` tokenization client-side (via `js-tiktoken`)
-- Colored token chips, density benchmarks across prose/code/JSON/numeric samples
-- **No API key required**
+## Start without an API key
 
-### Model Comparison
-- Send the same prompt to **Claude Haiku 4.5**, **Claude Sonnet 4.6**, and **GPT-4o Mini** in parallel
-- Task types: Summarization, Code Generation, Reasoning, Data Extraction
-- Per-model metrics: output, input/output tokens, latency, estimated cost
-- **LLM-as-judge** quality scoring (Sonnet 4.6 rates each output 1–10)
-- **Best value** badge for highest cost-efficiency (quality ÷ cost)
-- **Requires Anthropic and/or OpenAI API keys** (see below)
+Requires Node.js 22+.
 
-### Cost Calculator
-- Sliders for daily requests, avg input tokens, avg output tokens
-- Compare monthly cost across six models with a bar chart
-- Task profiles preset realistic usage patterns
-- **No API key required**
-
-### Evals Dashboard
-- Heatmap of average judge scores by model × task type
-- Cost vs quality scatter plot from a committed eval snapshot
-- Per-task-type model recommendations
-- **No API key required** (displays snapshot data; re-run evals via CLI to refresh)
-
----
-
-## Getting started
-
-```bash
-npm install
+```sh
+npm ci
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open http://localhost:3000 and select **Run experiment**. The default rules baseline runs entirely in your browser. Explore the dataset and expected answers, inspect failed fields, then export the run JSON.
 
-No `.env` file is required for most users. Token Analyzer and Cost Calculator work out of the box.
+The baseline recognizes explicit English field labels and US-style numbers. It deliberately has no semantic understanding, date-convention guessing, or locale inference. This makes its limitations visible before adding a model.
 
----
+## Compare hosted models (works on Vercel)
 
-## Adding API keys (no `.env` setup)
+1. Open **Getting started** or **API Key Settings** in Extraction Lab.
+2. Use the linked [Google AI Studio](https://aistudio.google.com/apikey), [Anthropic Console](https://console.anthropic.com/settings/keys), or [OpenAI Platform](https://platform.openai.com/api-keys) to create a provider key. A consumer chat subscription is not necessarily API credit.
+3. Paste the key and select **Save**. Saving makes no API request and does not verify access.
+4. Select one or more hosted models, review the request count and estimated charges, and acknowledge use of your paid balance or free quota.
+5. Select **Run experiment**. The same 12 invoices and deterministic grader are used for every candidate.
 
-ModelLens stores keys **in your browser's localStorage** under the key `modelLens_keys`. They are never written to a server-side environment variable or database.
+The curated reference choices are GPT-5.6 Terra, Claude Haiku 4.5, and Gemini 2.5 Flash. Availability depends on provider/account access. **Advanced: add a custom hosted model** accepts an exact model ID for OpenAI Chat Completions, Anthropic Messages, or Gemini generateContent. It does not accept arbitrary URLs or support every modality/API. Custom models use provider defaults for sampling/reasoning, unknown pricing, and the selected output strategy. Use Instructions only when schema constraints are unsupported; the app will report an error rather than silently downgrade or switch models.
 
-1. Open **API Key Settings** in the sidebar
-2. Paste your **Anthropic** key (`sk-ant-…`) to enable Haiku, Sonnet, and quality judging
-3. Paste your **OpenAI** key (`sk-…`) to enable GPT-4o Mini comparisons
-4. Click **Save** per provider
+Keys stay in page memory by default and clear on reload. **Remember keys on this device** explicitly opts into localStorage; disabling it removes persisted keys. Older automatically persisted keys without an opt-in flag are ignored; re-enter them. Keys pass through your Next.js server to the selected provider, are never read from server environment variables, and are excluded from run files. The code does not log keys or persist them in a server database; configure hosting/observability systems to avoid logging request bodies. Provider processing and retention terms still apply.
 
-Keys are sent only to the respective provider's API when you run Model Comparison. A dismissable onboarding banner appears on first load if no keys are configured.
+Hosted calls run sequentially, with 512 output tokens and a 25-second timeout per request. Timeouts or rate limits stop the run and preserve completed evidence. There are no automatic retries, provider/model substitutions, or paid judging calls. A timed-out request may still be billed by the provider.
 
-> **Note:** Server actions receive your keys as parameters from the client for comparison runs. This keeps setup simple but means keys transit through your Next.js server during those requests. For local development this is acceptable; do not deploy this pattern to a multi-tenant production app without a proper secrets architecture.
+Planning estimates use approximate input counts and a full output budget. Recorded estimates use reported tokens and standard list rates checked October 29, 2026; custom rates or missing usage remain unknown. Estimates exclude billing adjustments and may overstate cached/free-tier usage. They are **not spending caps**. Use provider-side spending limits where available. The UI orders qualifying candidates by latency and shows cost separately.
 
----
+Hosted metadata includes requested/returned model IDs, adapter version, output budget, actual sampling/reasoning settings, token usage, and pricing provenance. No seed is sent to hosted providers. Native JSON-schema constraints use a common basic object/type schema; the deterministic grader still checks exact dates, currency, and numeric rules. Provider capabilities differ, so schema mode is not an identical decoding implementation across providers.
 
-## How token pricing works
+### Deploying to Vercel
 
-Providers bill in **tokens**, not words or characters. Each request has two metered components:
+No shared provider keys are required in Vercel environment variables: visitors supply their own. Keep `MODELLENS_ENABLE_OLLAMA` unset on public deployments. The page requests a 30-second function duration; configure your Vercel plan to allow it. Each hosted request times out after 25 seconds, while the complete benchmark is coordinated in the browser. Do not close the page during a run.
 
-| Component | What it includes | Typical price |
-|-----------|------------------|---------------|
-| **Input tokens** | Your prompt, system message, conversation history, tool definitions | Lower $/1M tokens |
-| **Output tokens** | Everything the model generates | 3–5× higher $/1M tokens |
+## Compare local models
 
-**Why output costs more:** generation is sequential — the model must sample and verify each token autoregressively, which uses more compute per token than reading input in parallel.
+Install [Ollama](https://ollama.com), then download whichever candidates you want to evaluate:
 
-**What affects token count:**
-- Text length and tokenizer choice (GPT/Claude/Gemini use different vocabularies)
-- Formatting: code and JSON often use *more tokens per word* than prose
-- Whitespace and punctuation (leading spaces are often part of a token)
-- Images, PDFs, and long system prompts in agentic workflows
-
-ModelLens uses **hardcoded per-million-token list prices** in `src/lib/model-pricing.ts` (single registry with source URLs and last-verified dates). The Cost Calculator derives its model list from the same file. These are planning estimates — check provider pricing pages for current rates.
-
-**Cost formula (per request):**
-
-```
-cost = (inputTokens / 1_000_000 × inputPrice) + (outputTokens / 1_000_000 × outputPrice)
+```sh
+ollama pull llama3.2:3b
+ollama pull qwen2.5:3b
+# Optional, requires more memory:
+ollama pull gemma2:9b
+ollama serve
 ```
 
-**Monthly estimate (Cost Calculator):**
+If the Ollama desktop app is already serving, a second `ollama serve` is unnecessary. In another terminal:
 
-```
-monthly = costPerRequest × dailyRequests × 30
-```
-
----
-
-## Cost-efficiency scoring
-
-After a comparison run, ModelLens optionally judges output quality and computes **cost-efficiency**:
-
-```
-cost-efficiency = qualityScore / estimatedCostUsd
+```sh
+MODELLENS_ENABLE_OLLAMA=1 npm run dev
 ```
 
-- **qualityScore** — integer 1–10 from the LLM judge (see below)
-- **estimatedCostUsd** — computed from actual input/output token counts × hardcoded model pricing
+Select the installed candidates in Extraction Lab. Calls are sequential and go to `127.0.0.1:11434` **on the computer running Next.js**, not a remote visitor's computer. The feature is disabled unless explicitly enabled. Do not enable it on a public deployment. Model downloads are manual; ModelLens does not download weights.
 
-The model with the highest cost-efficiency gets the **Best value** badge. This favors models that score well *relative to what you paid*, not just the highest absolute quality. A Haiku response scoring 7 at $0.0003 can beat a Sonnet response scoring 9 at $0.003.
+Local inference has no per-request API fee. Hardware, electricity, model licensing, and memory requirements still apply. These named model versions are manageable starting candidates, not a claim that they are the latest or best models.
 
-If judging is skipped (no Anthropic key) or cost is zero, no badge is shown.
+## Workload and success criteria
 
----
+Dataset `invoices-v1.0.0` contains **12 hand-authored synthetic text invoices** in `src/lib/extraction/dataset.ts`:
 
-## LLM-as-judge scoring
+- Clean layouts and missing fields
+- Alternate labels, prose dates, and European number formatting
+- Distractor amounts and identifiers
+- Ambiguous dates and conflicting totals
+- Untrusted instructions embedded in the document
+- Unicode vendor names
 
-When an Anthropic key is present and at least one model returns successfully, ModelLens sends a follow-up request to **Claude Sonnet 4.6** acting as an impartial evaluator.
+Every answer must contain exactly six keys: `vendor`, `invoiceNumber`, `invoiceDate`, `dueDate`, `currency`, and `total`. All keys are required; missing or ambiguous values must be JSON `null`. Dates must be real ISO dates, currency an explicit uppercase three-letter code, and totals numeric with at most two decimal places. String values and identifiers are compared exactly; money uses a tiny floating-point tolerance, not rounding to the nearest cent.
 
-The judge receives:
-- The original prompt
-- The selected task type (e.g. "code generation")
-- All successful model outputs
+A case passes only if its JSON and schema are valid, every field is correct, and generation completed normally. No model evaluates its own answer. Expected answers are never sent to the inference endpoint.
 
-It returns JSON mapping each model ID to a score from 1–10:
+This is a development benchmark, not a representative production sample. It does not evaluate OCR or image/PDF reading. Model comparisons on 12 synthetic cases cannot establish general model superiority or production readiness. Extend the dataset and reserve a separate holdout before tuning prompts against it.
 
-```json
-{"claude-haiku-4-5": 7, "claude-sonnet-4-6": 9, "gpt-4o-mini": 8}
+## Experiments and provenance
+
+Choose one strategy per run:
+
+- **Instructions only:** ask for the schema in the system prompt.
+- **Instructions + example:** add one separate, synthetic worked example.
+- **Instructions + JSON schema:** use the selected provider's native JSON-schema output constraints.
+
+Compare strategies by running separate experiments on the same cases and candidates. All local generations use temperature 0, seed 42, a 512-token output budget, and a 4,096-token context window. One to five repeats are supported. Fixed-seed repeats are stability checks, not independent statistical trials.
+
+Run artifacts include the timestamp, dataset version and SHA-256, prompt/scorer versions, model tags and installed digests, settings, raw outputs, token counts when reported, finish reason, and field-level verdicts. Truncated answers fail explicitly. Request errors are distinct from answer failures. Unknown measurements remain null.
+
+The browser checkpoints after each attempt and retains its eight most recent runs. Export JSON for a durable copy. Imported files must match the bundled dataset and experiment versions; the app recomputes verdicts from raw outputs. Imports are user-supplied evidence, not cryptographically authenticated results. Interrupted runs remain inspectable; restart an experiment to repeat it.
+
+**Metrics:** exact pass rate includes request errors among attempted cases; field accuracy and schema validity use responses received. Coverage is completed generations / planned attempts. Latency includes local model lookup and potentially cold loading. p95 uses nearest-rank percentiles. A recommendation requires full generation coverage, the selected minimum pass rate, and the maximum p95 latency. Qualifying candidates are ordered by latency, with estimated API costs shown separately. Local hardware/electricity costs are unmeasured.
+
+## Reproduce from the command line
+
+The default run makes no network requests:
+
+```sh
+npm run evals:extraction
 ```
 
-**Caveats:**
-- Scores are subjective and non-deterministic — rerun comparisons may differ slightly
-- The judge has its own API cost (included in the ~$0.01 comparison estimate)
-- Sonnet 4.6 also competes as one of the three models, so it evaluates its own output alongside others
+To compare installed local models:
 
-Judging is skipped entirely if no Anthropic key is configured.
-
----
-
-## Evals system
-
-ModelLens includes a batch eval pipeline for systematic model comparison across 20 curated prompts.
-
-### What's in `/evals`
-
-| File | Purpose |
-|------|---------|
-| `prompts.json` | 20 prompts (5 per task type) with `id`, `task_type`, `prompt`, and `success_criteria` |
-| `run_evals.ts` | CLI script that runs all prompts against three models and judges each response |
-| `results.csv` | Output from the last eval run (60 rows = 20 prompts × 3 models) |
-| `env.eval.example` | Template for API keys — copy to `.env.eval` at project root |
-
-### Methodology
-
-1. **Prompt suite** — Each prompt has explicit success criteria (e.g. "must return valid JSON with fields X, Y, Z").
-2. **Model execution** — For each prompt, models run **in sequence**: `claude-haiku-4-5` → `claude-sonnet-4-6` → `gpt-4o-mini`. Each uses the same task-type system instruction as Model Comparison.
-3. **LLM-as-judge** — After each response, **Claude Sonnet 4.6** evaluates the output against the prompt's `success_criteria` and returns JSON: `{"score": 1-10, "pass": boolean}`. Pass defaults to `score >= 7` when criteria are substantially met.
-4. **Metrics recorded** — Input/output tokens, estimated cost (hardcoded pricing), latency, score, pass/fail.
-5. **Dashboard snapshot** — The Evals Dashboard reads a hardcoded CSV snapshot in `src/lib/evals-snapshot.ts` (kept in sync with `evals/results.csv`).
-
-### How to re-run evals
-
-```bash
-# 1. Create .env.eval at project root (gitignored)
-cp evals/env.eval.example .env.eval
-# Edit .env.eval — add ANTHROPIC_API_KEY and OPENAI_API_KEY
-
-# 2. Run the eval suite (~60 API calls; expect ~$0.50–2.00 depending on output length)
-npm run evals
-
-# 3. Refresh the dashboard snapshot
-# Copy the contents of evals/results.csv into the SNAPSHOT_CSV constant
-# in src/lib/evals-snapshot.ts
+```sh
+npm run evals:extraction -- --models baseline,llama3.2:3b,qwen2.5:3b --strategy schema --repeats 1
 ```
 
-The eval runner writes progress to stdout and saves `evals/results.csv`. Re-running overwrites the previous results.
+The CLI remains local-only and never reads hosted provider keys. Use the browser for hosted comparisons. The CLI writes JSON checkpoints and a Markdown findings report to gitignored `evals/runs/`. Use `--out <directory>` to choose another destination. Import a JSON file into the UI to inspect it. Ctrl+C stops after the current request finishes; requests time out after 90 seconds. A provider failure stops the run and preserves completed rows. No paid fallback or automatic retry is used.
 
-**Note:** Evals use `.env.eval` (CLI-only). This is separate from the browser localStorage keys used by Model Comparison — evals are intended for offline batch runs from your terminal.
+## Supporting tools
 
-### Reading the dashboard
+The existing Token Analyzer, paid Model Comparison, Cost Calculator, and legacy Evals remain accessible in the sidebar. Switching views preserves drafts and results for the lifetime of the page.
 
-- **Heatmap** — Average judge score per model and task type. Greener cells = higher scores.
-- **Cost vs quality scatter** — Each point is a model's average across all 20 prompts. Ideal models sit top-left (high quality, low cost).
-- **Recommendations** — Per task type, the model with the best cost-efficiency (`avgScore / avgCost`) in the snapshot, with a plain-language rationale.
+- **Token Analyzer:** `cl100k_base` exploration, not a universal Llama/Claude tokenizer or a billing prediction. Unicode fragments are grouped for accurate display. Special-token-like text is treated literally.
+- **Paid Model Comparison:** explicitly uses your Anthropic/OpenAI keys. Incomplete answers are excluded from judging and value selection. Best value requires at least 7/10 and a score within one point of the best, then selects the cheapest eligible result.
+- **Cost Calculator:** static list-price planning estimates. Gemini 1.5 Flash is excluded because it is retired; check current provider prices before planning production spend.
+- **Legacy Evals:** unverified demo snapshot, clearly labeled. It is not evidence for the new extraction benchmark.
 
----
+API Key Settings are shared by hosted Extraction Lab and the older paid comparison tool. Keys stay in page memory unless you opt into localStorage. **They pass through the Next.js app server to the selected provider when calls run.** The legacy paid eval CLI uses a separate `.env.eval` file and can incur charges; it is not part of the free extraction workflow.
 
-## What I learned
+## Validation
 
-Building ModelLens surfaced a few non-obvious patterns in token economics:
+```sh
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
 
-1. **Format matters more than length.** The same semantic content in JSON or TypeScript can consume 1.5–2× the tokens of equivalent prose because BPE tokenizers split symbols aggressively. Cost estimates based on word count alone will lie to you — always tokenize the actual payload.
+Tests cover reference consistency, strict grading, hallucinated/missing fields, malformed output, truncation, failure accounting, artifact validation, mocked Ollama and hosted-provider behavior, session-only credential storage, safe error handling, token/cost accounting, Unicode tokenization, and value thresholds. CI runs these checks without provider keys. System fonts avoid network-dependent builds.
 
-2. **Output tokens dominate spend on chatty models.** Because output is priced several times higher than input, a model that rambles (or that you allow to generate long chain-of-thought) can cost more than a smarter model that answers concisely. Controlling `max_tokens` and prompt style often saves more than switching providers.
+## Next research questions
 
-3. **The "best" model depends on the metric.** Sonnet consistently wins quality scores, but Haiku and GPT-4o Mini often win cost-efficiency on structured tasks like summarization and extraction. For high-volume simple workloads, the quality gap may not justify 10–20× the price.
+1. Which failure categories improve with examples or schema constraints?
+2. Do observed improvements persist on an unseen invoice set?
+3. Can a conservative rules-first pipeline safely abstain on difficult cases?
+4. On the same held-out cases, does a paid model improve cost per successful extraction enough to justify its cost?
 
-4. **Small string changes change the bill.** `"fire truck"` and `"firetruck"` tokenize differently; adding a space or switching from camelCase to snake_case in a JSON schema can shift token counts enough to matter at scale. The Token Analyzer makes these invisible costs visible before they hit production traffic.
-
----
-
-## Tech stack
-
-- **Next.js 16** (App Router, Server Actions)
-- **React 19**, **Tailwind CSS 4**
-- **js-tiktoken** — client-side `cl100k_base` tokenization
-- **recharts** — Cost Calculator bar chart
-- **Radix UI** — accessible primitives
-
-## Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Production build |
-| `npm run start` | Run production server |
-| `npm run lint` | ESLint |
-| `npm run evals` | Run batch eval suite (requires `.env.eval`) |
-
-## License
-
-Private project — see repository for license details.
+Keep experiment outputs and negative results. A defensible explanation of where an approach fails is more useful than a universal leaderboard claim.

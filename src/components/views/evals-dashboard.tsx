@@ -63,8 +63,8 @@ export function EvalsDashboard() {
             Evals Dashboard
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Snapshot results from 20 prompts × 3 models — judged by Claude
-            Sonnet 4.6 against success criteria.
+            Unverified legacy demo data for 20 prompts × 3 models. Do not use
+            this snapshot as evidence of measured model performance. Use Extraction Lab for recorded experiments.
           </p>
         </div>
         <Badge

@@ -6,10 +6,12 @@ import {
 
 /** Models within this many points of the top score compete for "best value". */
 export const QUALITY_VALUE_GATE = 1;
+export const MINIMUM_QUALITY_SCORE = 7;
 
 type ScorableResult = {
   costUsd: number;
   error?: string;
+  complete?: boolean;
 };
 
 type ResultMap = Partial<Record<ComparisonModelId, ScorableResult>>;
@@ -50,14 +52,14 @@ export function computeBestValue(
 
   if (!Number.isFinite(topScore)) return null;
 
-  const threshold = topScore - gate;
+  const threshold = Math.max(MINIMUM_QUALITY_SCORE, topScore - gate);
   let best: ComparisonModelId | null = null;
   let bestCost = Infinity;
 
   for (const model of COMPARISON_MODELS) {
     const result = results[model.id];
     const score = scores[model.id];
-    if (!result || result.error || score == null || result.costUsd <= 0) {
+    if (!result || result.error || result.complete === false || score == null || !Number.isFinite(result.costUsd) || result.costUsd < 0) {
       continue;
     }
     if (score < threshold) continue;
@@ -86,5 +88,5 @@ export function isValueEligible(
     -Infinity
   );
 
-  return Number.isFinite(topScore) && score >= topScore - gate;
+  return Number.isFinite(topScore) && score >= Math.max(MINIMUM_QUALITY_SCORE, topScore - gate);
 }

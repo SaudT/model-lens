@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, KeyRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -35,31 +35,26 @@ const PROVIDERS: {
 ];
 
 export function ApiKeySettings() {
-  const { keys, updateKeys, isConnected } = useApiKeys();
+  const { keys, updateKeys, isConnected, remember, setRemember } = useApiKeys();
+  const [storageError, setStorageError] = useState("");
   const [draft, setDraft] = useState<ApiKeys>({});
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setDraft({});
-    }
-  }, [open]);
 
   function handleSave(provider: Provider) {
     const value = draft[provider]?.trim();
     if (!value) return;
-    updateKeys({ ...keys, [provider]: value });
+    try { updateKeys({ ...keys, [provider]: value }); setStorageError(""); } catch { setStorageError("Cannot save keys. Check browser storage permissions."); return; }
     setDraft((prev) => ({ ...prev, [provider]: "" }));
   }
 
   function handleClear(provider: Provider) {
     const next = { ...keys };
     delete next[provider];
-    updateKeys(next);
+    try { updateKeys(next); setStorageError(""); } catch { setStorageError("Cannot clear stored keys. Check browser storage permissions."); }
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={(next) => { if (next) setDraft({}); setOpen(next); }}>
       <SheetTrigger asChild>
         <Button variant="outline" className="w-full justify-start gap-2">
           <KeyRound className="h-4 w-4" />
@@ -77,11 +72,16 @@ export function ApiKeySettings() {
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <p>
-            Keys are stored locally in your browser and never sent to any server
-            except the respective AI provider.
+            Keys stay in page memory by default and clear on reload. Hosted calls
+            pass through the ModelLens server to your selected provider. Keys
+            are not stored in a server database or included in experiment exports.
+            Provider billing and data policies apply.
           </p>
         </div>
 
+        <label className="mt-4 flex items-start gap-2 text-sm"><input type="checkbox" checked={remember} onChange={e => { try { setRemember(e.target.checked); setStorageError(""); } catch { setStorageError("Cannot change key storage. Check browser permissions."); } }}/><span>Remember keys on this device (localStorage). Leave off on shared computers.</span></label>
+        {storageError && <p role="alert" className="mt-2 text-sm text-red-700">{storageError}</p>}
+        <ol className="mt-4 list-inside list-decimal space-y-1 text-xs text-muted-foreground"><li>Create an API key in the provider console below. A chat subscription does not necessarily include API credit.</li><li>Paste it and choose Save. Saving does not call the API or verify the key.</li><li>Select a model in Extraction Lab, review the charge notice, and run the experiment.</li></ol>
         <div className="mt-6 space-y-6">
           {PROVIDERS.map((provider, index) => {
             const savedKey = keys[provider.id];
@@ -96,10 +96,11 @@ export function ApiKeySettings() {
                       {provider.label}
                     </Label>
                     <Badge variant={connected ? "success" : "danger"}>
-                      {connected ? "connected" : "not set"}
+                      {connected ? (remember ? "saved · unverified" : "page session · unverified") : "not set"}
                     </Badge>
                   </div>
 
+                  <a className="text-xs underline" href={provider.id === "openai" ? "https://platform.openai.com/api-keys" : provider.id === "anthropic" ? "https://console.anthropic.com/settings/keys" : "https://aistudio.google.com/apikey"} target="_blank" rel="noreferrer">Get a {provider.label} API key</a>
                   {savedKey && (
                     <p className="font-mono text-xs text-muted-foreground">
                       {maskApiKey(savedKey)}
@@ -109,6 +110,8 @@ export function ApiKeySettings() {
                   <Input
                     id={`key-${provider.id}`}
                     type="password"
+                    autoComplete="off"
+                    spellCheck={false}
                     placeholder={provider.placeholder}
                     value={draft[provider.id] ?? ""}
                     onChange={(e) =>

@@ -46,7 +46,7 @@ export function TokenAnalyzer() {
   const [contentType, setContentType] = useState<ContentType>("prose");
 
   const tokens = useMemo(() => tokenize(text), [text]);
-  const totalTokens = tokens.length;
+  const totalTokens = tokens.reduce((sum, token) => sum + token.ids.length, 0);
   const characters = text.length;
   const words = countWords(text);
   const ratio = tokensPerWord(totalTokens, words);
@@ -214,8 +214,8 @@ export function TokenAnalyzer() {
             <div>
               <CardTitle className="text-base">Token map</CardTitle>
               <CardDescription>
-                Each chip is one BPE token. Adjacent colors alternate for
-                readability.
+                Chips show BPE tokens. Tokens sharing a Unicode character are
+                grouped to preserve the original text.
               </CardDescription>
             </div>
             {totalTokens > 0 && (
@@ -236,7 +236,7 @@ export function TokenAnalyzer() {
                 {tokens.map((token) => (
                   <span
                     key={token.index}
-                    title={`#${token.index} · id ${token.id}`}
+                    title={`#${token.index} · ids ${token.ids.join(", ")}`}
                     className={cn(
                       "inline-block rounded-sm px-0.5 py-px",
                       TOKEN_COLORS[token.index % TOKEN_COLORS.length]
