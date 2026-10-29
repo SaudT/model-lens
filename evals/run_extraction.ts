@@ -15,6 +15,7 @@ async function main() {
     options[args[i]] = args[i+1];
   }
   const run = await createExperiment((options["--models"] ?? "baseline").split(",") as CandidateId[], (options["--strategy"] ?? "schema") as Strategy, Number(options["--repeats"] ?? 1));
+  if (run.config.candidates.some(id => !["baseline", "llama3.2:3b", "qwen2.5:3b", "gemma2:9b"].includes(id))) throw new Error("Use Extraction Lab in the browser for hosted models and API keys. The CLI supports local candidates only.");
   const directory = options["--out"] ?? "evals/runs";
   mkdirSync(directory,{recursive:true});
   const output = join(directory, `${run.id}.json`);

@@ -1,16 +1,13 @@
 import { DATASET_VERSION, INVOICE_CASES, PROMPT_VERSION, SCORER_VERSION, type InvoiceCase } from "./dataset";
 import { scoreInvoice, type Verdict } from "./scoring";
 
-export const CANDIDATES = [
-  { id: "baseline", label: "Rules baseline", provider: "browser" },
-  { id: "llama3.2:3b", label: "Llama 3.2 · 3B", provider: "ollama" },
-  { id: "qwen2.5:3b", label: "Qwen 2.5 · 3B", provider: "ollama" },
-  { id: "gemma2:9b", label: "Gemma 2 · 9B", provider: "ollama" },
-] as const;
-export type CandidateId = (typeof CANDIDATES)[number]["id"];
+import { resolveCandidate, estimatedCost } from "./models";
+import type { HostedMetadata } from "./hosted";
+export { CANDIDATES } from "./models";
+export type CandidateId = string;
 export const STRATEGIES = ["plain", "few-shot", "schema"] as const;
 export type Strategy = (typeof STRATEGIES)[number];
-export type Generation = { response: string; latencyMs: number; inputTokens: number | null; outputTokens: number | null; complete: boolean; finishReason: string; modelDigest: string | null; error?: string };
+export type Generation = { response: string; latencyMs: number; inputTokens: number | null; outputTokens: number | null; complete: boolean; finishReason: string; modelDigest: string | null; hosted?: HostedMetadata; error?: string };
 export type ExtractionRow = Generation & { caseId: string; candidate: CandidateId; repeat: number; verdict: Verdict | null };
 export type Experiment = {
   formatVersion: 1; id: string; createdAt: string; finishedAt: string | null;
@@ -20,7 +17,7 @@ export type Experiment = {
 };
 
 export async function createExperiment(candidates: CandidateId[], strategy: Strategy, repeats: number): Promise<Experiment> {
-  if (!candidates.length || new Set(candidates).size !== candidates.length || candidates.some(c => !CANDIDATES.some(x => x.id === c)) || !STRATEGIES.includes(strategy) || !Number.isInteger(repeats) || repeats < 1 || repeats > 5) throw new Error("Invalid experiment configuration");
+  if (!candidates.length || new Set(candidates).size !== candidates.length || candidates.length > 8 || candidates.some(c => !resolveCandidate(c)) || !STRATEGIES.includes(strategy) || !Number.isInteger(repeats) || repeats < 1 || repeats > 5) throw new Error("Invalid experiment configuration");
   const bytes = new TextEncoder().encode(JSON.stringify(INVOICE_CASES));
   const hash = await crypto.subtle.digest("SHA-256", bytes);
   return { formatVersion: 1, id: crypto.randomUUID(), createdAt: new Date().toISOString(), finishedAt: null, datasetVersion: DATASET_VERSION, datasetHash: Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join(""), scorerVersion: SCORER_VERSION, promptVersion: PROMPT_VERSION, config: { candidates, strategy, repeats, temperature: 0, seed: 42, maxTokens: 512, contextTokens: 4096 }, status: "running", rows: [] };
@@ -49,6 +46,7 @@ export function summarize(experiment: Experiment) {
       schemaRate: judged.length ? judged.filter(r => r.verdict!.schemaValid).length / judged.length : null,
       coverage: complete.length / expected,
       medianMs: percentile(complete.map(r => r.latencyMs), .5), p95Ms: percentile(complete.map(r => r.latencyMs), .95),
+      estimatedCostUsd: rows.some(r => r.hosted ? r.hosted.estimatedCostUsd === null : estimatedCost(resolveCandidate(candidate)!, null, null) === null) ? null : rows.reduce((sum,r) => sum + (r.hosted?.estimatedCostUsd ?? 0), 0),
       eligible: rows.length === expected && passed === expected,
     };
   });
@@ -70,8 +68,15 @@ export async function parseExperiment(text: string): Promise<Experiment> {
     const key = `${row.caseId}/${row.candidate}/${row.repeat}`;
     if (!item || !value.config.candidates.includes(row.candidate) || !Number.isInteger(row.repeat) || row.repeat < 0 || row.repeat >= value.config.repeats || seen.has(key) || typeof row.response !== "string" || row.response.length > 100_000 || typeof row.complete !== "boolean" || typeof row.finishReason !== "string" || !Number.isFinite(row.latencyMs) || row.latencyMs < 0 || (row.error !== undefined && typeof row.error !== "string") || (row.modelDigest !== null && typeof row.modelDigest !== "string")) throw new Error("Invalid or duplicate result row");
     for (const count of [row.inputTokens, row.outputTokens]) if (count !== null && (!Number.isInteger(count) || count < 0)) throw new Error("Invalid token count");
+    let hosted: HostedMetadata | undefined;
+    if (row.hosted !== undefined) {
+      const h = row.hosted;
+      const candidate = resolveCandidate(row.candidate)!;
+      if (!h || h.provider !== candidate.provider || h.requestedModel !== candidate.model || h.adapterVersion !== "hosted-v1" || typeof h.actualModel !== "string" || h.actualModel.length > 160 || h.outputBudget !== 512 || (h.temperature !== null && h.temperature !== 0) || h.seed !== null || (h.reasoning !== null && typeof h.reasoning !== "string")) throw new Error("Invalid hosted provenance");
+      hosted = { provider: h.provider, requestedModel: h.requestedModel, actualModel: h.actualModel, adapterVersion: "hosted-v1", outputBudget: 512, temperature: h.temperature, seed: null, reasoning: h.reasoning, estimatedCostUsd: estimatedCost(candidate,row.inputTokens,row.outputTokens), priceSource: candidate.pricing?.url ?? null, priceChecked: candidate.pricing?.checked ?? null };
+    }
     seen.add(key);
-    return makeRow(item, row.candidate, row.repeat, { response: row.response, latencyMs: row.latencyMs, inputTokens: row.inputTokens, outputTokens: row.outputTokens, complete: row.complete, finishReason: row.finishReason, modelDigest: row.modelDigest, ...(row.error ? { error: row.error } : {}) });
+    return makeRow(item, row.candidate, row.repeat, { response: row.response, latencyMs: row.latencyMs, inputTokens: row.inputTokens, outputTokens: row.outputTokens, complete: row.complete, finishReason: row.finishReason, modelDigest: row.modelDigest, ...(hosted ? { hosted } : {}), ...(row.error ? { error: row.error } : {}) });
   });
   if (value.status === "completed" && value.rows.length !== reference.config.candidates.length * INVOICE_CASES.length * reference.config.repeats) throw new Error("Completed run is missing results");
   return { ...reference, id: value.id, createdAt: value.createdAt, finishedAt: typeof value.finishedAt === "string" ? value.finishedAt : null, status: value.status, rows: value.rows };

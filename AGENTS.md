@@ -178,3 +178,7 @@ The app now opens on `extraction-lab`. This is the main product direction; the f
 Bump dataset/prompt/scorer versions when their semantics change. Never pass reference answers to inference or fabricate benchmark measurements. Local API fees are zero but hardware/electricity are unmeasured. Treat interrupted, truncated, and failed requests distinctly. The legacy demo snapshot must remain labeled unverified.
 
 Run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build` after changes. Do not run the legacy paid eval CLI unless paid calls are explicitly requested.
+
+## Hosted extraction providers
+
+`models.ts` resolves curated/custom IDs; `hosted.ts` calls fixed official endpoints with visitor-supplied keys; `prompt.ts` shares unchanged extraction instructions with Ollama. Hosted calls are browser-orchestrated via `runHostedExtraction`; the CLI is local-only. Keys stay in page memory unless the user explicitly opts into localStorage. Never read provider keys from environment variables, return provider error bodies, log credentials, or put them in experiment artifacts. Native hosted schemas use basic nullable types; grading remains strict. Custom model sampling and reasoning use provider defaults; record actual request settings in hosted provenance. Unknown usage/prices must remain null, never zero. Do not perform billable integration tests without explicit authorization.

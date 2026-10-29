@@ -17,3 +17,10 @@ export async function runLocalExtraction(candidate: CandidateId, caseId: string,
     return { response: "", latencyMs: Date.now() - started, inputTokens: null, outputTokens: null, complete: false, finishReason: "error", modelDigest: null, error: message === "fetch failed" ? "Cannot reach Ollama. Start ollama serve on the app server’s computer." : message };
   }
 }
+
+export async function runHostedExtraction(candidate: string, caseId: string, strategy: Strategy, apiKey: string): Promise<Generation> {
+  const { runHosted } = await import("@/lib/extraction/hosted");
+  const item = INVOICE_CASES.find(c => c.id === caseId);
+  if (!item) return { response: "", latencyMs: 0, inputTokens: null, outputTokens: null, complete: false, finishReason: "error", modelDigest: null, error: "Unknown invoice case" };
+  return runHosted(candidate, item.text, strategy, apiKey);
+}
